@@ -75,112 +75,12 @@
 #define TIME_CHAMPIGNONS	60.0
 #define TIME_METH	90.0
 
-#define PRICE_GLOCK	200
-#define PRICE_USP	250
-#define PRICE_P228	300
-#define PRICE_DEAGLE	325
-#define PRICE_FIVESEVEN	375
-#define PRICE_ELITES 400
-#define PRICE_TMP	650
-#define PRICE_MAC10	700
-#define PRICE_MP5	725
-#define PRICE_M3	800
-#define PRICE_UMP45	850
-#define PRICE_XM1014	900
-#define PRICE_GALIL	1000
-#define PRICE_FAMAS	1125
-#define PRICE_P90	1175
-#define PRICE_AK47	1250
-#define PRICE_SCOUT	1375
-#define PRICE_M4A1	1550
-#define PRICE_AUG 1750
-#define PRICE_SG552	1750
-#define PRICE_SG550	2100
-#define PRICE_AWP	2375
-#define PRICE_G3SG1	2500
-#define PRICE_M249	2875
-#define PRICE_CARTOUCHE	150
-
-#define PRICE_GLOCK_ARMU	400
-#define PRICE_USP_ARMU	450
-#define PRICE_P228_ARMU	500
-#define PRICE_DEAGLE_ARMU	525
-#define PRICE_FIVESEVEN_ARMU	575
-#define PRICE_ELITES_ARMU 600
-#define PRICE_TMP_ARMU	850
-#define PRICE_MAC10_ARMU	900
-#define PRICE_MP5_ARMU	925
-#define PRICE_M3_ARMU	1000
-#define PRICE_UMP45_ARMU	1050
-#define PRICE_XM1014_ARMU	1100
-#define PRICE_GALIL_ARMU	1200
-#define PRICE_FAMAS_ARMU	1325
-#define PRICE_P90_ARMU	1375
-#define PRICE_AK47_ARMU	1450
-#define PRICE_SCOUT_ARMU	1575
-#define PRICE_M4A1_ARMU	1750
-#define PRICE_AUG_ARMU 1950
-#define PRICE_SG552_ARMU	1950
-#define PRICE_SG550_ARMU	2300
-#define PRICE_AWP_ARMU	2575
-#define PRICE_G3SG1_ARMU	2700
-#define PRICE_M249_ARMU	3075
-#define PRICE_CARTOUCHE_ARMU	350
-
 #define PRICE_ECSTAZY	500
 #define PRICE_COCAINE	400
 #define PRICE_HEROINE	300
 #define PRICE_SHIT	200
 #define PRICE_WEED	100
 #define PRICE_CHAMPIGNONS	80
-
-#define PRICE_LEVELCUT	60
-#define PRICE_CUTBURN	300
-#define PRICE_CUTFREEZE	400
-#define PRICE_CUTFLASH	200
-#define PRICE_CUTSMALL	600
-#define PRICE_CUTBIG	600
-
-#define PRICE_GRENADE 400
-#define PRICE_FLASH 300
-#define PRICE_FUMIGENE 200
-#define PRICE_GILET 500
-#define PRICE_KEVLAR 700
-#define PRICE_PERMISPROJECTILES	1000
-
-#define PRICE_CB	200
-#define PRICE_RIB	300
-#define PRICE_COMPTE	800
-#define PRICE_FICHE	1000
-
-#define PRICE_CB_BANK	400
-#define PRICE_RIB_BANK	600
-#define PRICE_FICHE_BANK	2000
-
-#define PRICE_COMPTE_DISTRIB	1000
-
-#define PRICE_PERMISLOURD	1000
-#define PRICE_PERMISLEGER	800
-#define PRICE_DIPLOME	100
-
-#define PRICE_PERMISLOURD_MNT	2000
-#define PRICE_PERMISLEGER_MNT	1600
-#define PRICE_DIPLOME_MNT	200
-
-#define PRICE_TICKET10		10
-#define PRICE_TICKET50		50
-#define PRICE_TICKET100	100
-#define PRICE_TICKET500	500
-#define PRICE_TICKET1000	1000
-
-#define PRICE_TROUSSE	500
-#define PRICE_KIT 700
-#define PRICE_SAC 1000
-#define PRICE_CHIRURGIEJAMBES 2000
-#define PRICE_CHIRURGIECOEUR 1500
-#define PRICE_CHIRURGIETETE 1200
-
-#define PRICE_ENQUETE 300
 
 #define PRICE_CONTRATFLIC		1000
 #define PRICE_CONTRATCIVIL	600
@@ -194,17 +94,6 @@
 #define PRICE_HAMBURGERFAT	600
 #define PRICE_BIGMAC	900
 #define PRICE_HAPPYMEAL	1500
-
-#define PRICE_SKINPOLIZEI		2000
-#define PRICE_SKINCHRISTMAS	2000
-#define PRICE_SKINPINK			2000
-#define PRICE_SKINTASKFORCE	2000
-#define PRICE_SKINURBAN		2000
-#define PRICE_SKINUMBRELLA	2000
-#define PRICE_SKINFISHER		2000
-#define PRICE_SKINNIKO			2000
-#define PRICE_SKINCHEF			2000
-#define PRICE_SKINKIRBYT		2000
 
 #define g_bPrefix "{orangered}[Roleplay]{unique}"
 #define g_bPrefixEvent "{blue}[{red}★ RP-Event ★{blue}]{green}"
@@ -2949,6 +2838,7 @@ public OnClientDisconnect(client)
 		
 		RemoveImprimante(client, SteamId);
 		RemovePlante(client, SteamId);
+		RemovePC(client);
 		DeleteClientDoors(SteamId);
 		
 		SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
@@ -6172,21 +6062,6 @@ public Menu_Bank(Handle:menu, MenuAction:action, client, param2)
 				}
 			}
 		}
-		else if (StrEqual(info, "cc"))
-		{
-			if (money[client] >= PRICE_COMPTE_DISTRIB)
-			{
-				money[client] -= PRICE_COMPTE_DISTRIB;
-				
-				compte[client] = 1;
-				
-				CPrintToChat(client, "%s : Activation de votre compte courant effectuée.", g_bPrefix);
-			}
-			else
-			{
-				CPrintToChat(client, "%s : Vous n'avez pas assez d'argent pour finaliser la transaction.", g_bPrefix);
-			}
-		}
 	}
 	else if (action == MenuAction_End)
 	{
@@ -6254,6 +6129,15 @@ public deposit_menu(Handle:menub, MenuAction:action, client, param2)
 }
 
 public saveSkimmedMoney (playerId, amount) {
+	for (new i = 1; i <= MaxClients; i++) {
+		if (IsClientInGame(i))
+		{
+			if (playerIds[i] == playerId) {
+				money[i] += amount;
+				return true;
+			}
+		}
+	}
 	new String:buffer[800];
 	decl String:error[256];
 	new Handle:database = SQL_Connect("roleplay", true, error, sizeof(error));
@@ -6282,6 +6166,7 @@ public saveSkimmedMoney (playerId, amount) {
 	SQL_UnlockDatabase(database);
 	CloseHandle(query);
 	CloseHandle(database);
+	return true;
 }
 
 public CallbackUpdateSkimmedMoney(Handle:owner, Handle:hndl, const String:error[], any:client)
@@ -6365,8 +6250,9 @@ public Action:Timer_VerifyATM(Handle:timer, any:client)
 		Entity_GetName(Entiter[client], name, sizeof(name));
 		if (StrContains(name, "hacked_distributeur_") != -1) {
 			DispatchKeyValue(Entiter[client], "targetname", "distributeur");
-			CPrintToChat(client, "%s : Vous avez retiré un {red}dispositif illégal{default} attaché au {olive}distributeur{default} !", g_bPrefix);
-			money[client] += 500;
+			new primeAmount = 500;
+			CPrintToChat(client, "%s : Vous avez retiré un {red}dispositif illégal{default} attaché au {olive}distributeur{default} et vous empochez une prime de {olive}%i€{default} subventionnée par la ville !", g_bPrefix, primeAmount);
+			money[client] += primeAmount;
 		} else {
 			CPrintToChat(client, "%s : Le {olive}distributeur{default} est aux normes !", g_bPrefix);
 		}
@@ -11275,6 +11161,28 @@ public RemovePlante(client, const String:SteamId[])
 	}
 }
 
+public RemovePC(client)
+{
+	decl String:itemType[128];
+	new maxent = GetMaxEntities();
+	for (new i = MaxClients; i <= maxent; i++) {
+		if(IsValidEdict(i) && IsValidEntity(i)) {
+			new String:Name[200];
+			Entity_GetName(i, Name, sizeof(Name));
+
+			decl String:Buffer[8][32];
+			if (ExplodeString(Name, "_", Buffer, 4, 32) > 2) {
+				itemType = Buffer[0];
+				if (StrEqual(itemType, "pc")) {
+					if (StringToInt(Buffer[2]) == client) {
+						RemoveEdict(i);
+					}
+				}
+			}
+		}
+	}
+}
+
 public SetLights()
 {
 	new light_pole = CreateEntityByName("light_dynamic");
@@ -12005,25 +11913,21 @@ Handle:BuildPCMenu(client, hack)
 			decl String:pcName[32];
 			if (ExplodeString(Name, "_", Buffer, 4, 32) > 2) {
 				itemType = Buffer[0];
-				if (StringToInt(Buffer[3]) != playerIds[StringToInt(Buffer[2])]) {
-					RemoveEdict(entity);
-				} else {
-					if (StrEqual(itemType, "pc")) {
-						if (!hack) {
-							if (StringToInt(Buffer[2]) == client) {
-								IntToString(entity, pcIdentifier, sizeof(pcIdentifier));
-								Format(pcName, sizeof(pcName), "PC #%i", i);
-								AddMenuItem(Pc, pcIdentifier, pcName);
-								i++;
-							}
-						} else {
+				if (StrEqual(itemType, "pc")) {
+					if (!hack) {
+						if (StringToInt(Buffer[2]) == client) {
 							IntToString(entity, pcIdentifier, sizeof(pcIdentifier));
-							decl String:playerName[120];
-							GetClientName(StringToInt(Buffer[2]), playerName, sizeof(playerName));
-							Format(pcName, sizeof(pcName), "PC de %s #%i", playerName, i);
+							Format(pcName, sizeof(pcName), "PC #%i", i);
 							AddMenuItem(Pc, pcIdentifier, pcName);
 							i++;
 						}
+					} else {
+						IntToString(entity, pcIdentifier, sizeof(pcIdentifier));
+						decl String:playerName[120];
+						GetClientName(StringToInt(Buffer[2]), playerName, sizeof(playerName));
+						Format(pcName, sizeof(pcName), "PC de %s #%i", playerName, i);
+						AddMenuItem(Pc, pcIdentifier, pcName);
+						i++;
 					}
 				}
 			}
