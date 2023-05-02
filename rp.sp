@@ -119,6 +119,8 @@ new Handle:Timers;
 new Handle:gTimer;
 new Handle:WeaponClean;
 new Handle:Pub;
+new Handle:mayorVote;
+new Handle:chooseMayor;
 KeyValues g_kvZones;
 KeyValues g_kvJobs;
 KeyValues g_kvDoors;
@@ -134,6 +136,8 @@ new bool:InQuery;
 new bool:ACTIVE_LIMITATION = true;
 new bool:ACTIVE_TRACEBAN = true;
 new bool:reboot = false;
+new bool:mayorTimer = false;
+new bool:mayorAlive = false;
 new bool:BraquageEnCours = false;
 new bool:IsDisconnect[MAXPLAYERS+1];
 new bool:isObserver[MAXPLAYERS+1];
@@ -176,6 +180,7 @@ new bool:TimerDead[MAXPLAYERS+1] = false;
 new bool:IsExitVehicle[MAXPLAYERS+1] = false;
 new bool:CarHorn[MAXPLAYERS+1] = false;
 new bool:IsInAreaMod[MAXPLAYERS+1] = false;
+new bool:mayorCandidate[MAXPLAYERS+1] = false;
 
 new jobs[MAXPLAYERS+1] = 0;
 new TypeAccount[MAXPLAYERS+1] = 0;
@@ -228,6 +233,8 @@ new convoquer[MAXPLAYERS+1] = 0;
 new HasImprimante[MAXPLAYERS+1] = 0;
 new HasPlante[MAXPLAYERS+1] = 0;
 new braquagetime[MAXPLAYERS+1] = 0;
+new votedForMayor[MAXPLAYERS+1] = 0;
+new mayorCount[MAXPLAYERS+1] = 0;
 
 
 new g_areaShootCount = 0;
@@ -385,6 +392,7 @@ public OnPluginStart()
 	RegConsoleCmd("sm_buy", Command_Buy);
 	RegConsoleCmd("sm_buygroup", Command_Buygroup);
 	RegConsoleCmd("sm_camera", Command_Camera);
+	RegConsoleCmd("sm_mayor", Command_Mayor);
 	
 	RegAdminCmd("sm_givemoney", Command_Givemoney, ADMFLAG_ROOT);
 	
@@ -1078,7 +1086,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 		{
 			AFK[client] = false;
 			
-			CPrintToChatAll("%s : %N n'est plus {olive}absent {default}!", g_bPrefix, client);
+			CPrintToChatAll("%s : %N n'est plus {olive}absent {unique}!", g_bPrefix, client);
 			
 			decl String:ClanTagRankName[20];
 			
@@ -1092,7 +1100,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 	{
 		if (IsPossibleToAfk[client] && ((GetGameTime() - AFK_TIMER[client]) >= AFK_TIME))
 		{
-			CPrintToChatAll("%s : %N est {red}absent {default}!", g_bPrefix, client);
+			CPrintToChatAll("%s : %N est {red}absent {unique}!", g_bPrefix, client);
 			AFK[client] = true;
 				
 			decl String:ClanTagRankName[20];
@@ -1140,7 +1148,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 					new itemID = StringToInt(Buffer[1]);
 					new quantity = 1;
 					SaveInventory(client, itemID, Buffer[2], quantity);
-					CPrintToChat(client, "%s : Vous avez ramassé {red}%i{default} {olive}%s{default}.", g_bPrefix, quantity, Buffer[2]);
+					CPrintToChat(client, "%s : Vous avez ramassé {red}%i{unique} {olive}%s{unique}.", g_bPrefix, quantity, Buffer[2]);
 					RemoveEdict(Ent);
 				}
 			}
@@ -1213,7 +1221,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 					}
 					else
 					{
-						CPrintToChat(client, "%s : J'ai besoin d'un {olive}compte bancaire{default} pour pouvoir utiliser ce {olive}distributeur{default}.", g_bPrefix);
+						CPrintToChat(client, "%s : J'ai besoin d'un {olive}compte bancaire{unique} pour pouvoir utiliser ce {olive}distributeur{unique}.", g_bPrefix);
 					}
 				}
 				else
@@ -1225,7 +1233,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 			{
 				if (distance <= 60)
 				{
-					if (IsMafia(client) && IsInMafia(client))
+					if ((IsMafia(client) && IsInMafia(client)) || (IsWildlings(client) && IsInWildlings(client)))
 						{
 							if (!OnCreationKit[client])
 							{
@@ -1361,6 +1369,13 @@ public Action:OnPlayerDeath(Handle:event, const String:name[], bool:dontBroadcas
 			if (!IsPlayerAlive(client))
 			{
 				g_CountDead[client] = RESPAWN_TIME;
+
+				if (IsMaire(client)) {
+					CPrintToChatAll("%s : Le Maire {olive}%N{unique} vient malheureusement de nous {red}quitter{unique} ! Il est désormais possible de procéder à un nouveau vote pour élire un Maire !", g_bPrefix, client);
+					SetClientJobID(client, beforeCouvertureJobId[client]);
+					SetClientRankID(client, beforeCouvertureRankId[client]);
+					mayorAlive = false;
+				}
 				
 				g_deadtimer[client] = CreateTimer(1.0, Timer_Dead, client, TIMER_REPEAT);
 				IsTazed[client] = false;
@@ -1767,7 +1782,7 @@ public Action:Block_CMD(client, Args)
 }
 
 public SetRpName (client, String:newRpName[]) {
-	CPrintToChat(client, "%s : Vous vous êtes renommé en {olive}%s{default}.", g_bPrefix, newRpName);
+	CPrintToChat(client, "%s : Vous vous êtes renommé en {olive}%s{unique}.", g_bPrefix, newRpName);
 	SetClientName(client, newRpName);
 }
 
@@ -2329,7 +2344,7 @@ public GiveSalary()
 						dirtyMoneyDailyAmount = GetClientDirtyMoney(i)/12;
 						ClientDirtyMoneyTransaction(i, -dirtyMoneyDailyAmount);
 						money[i] += dirtyMoneyDailyAmount;
-						CPrintToChat(i, "%s : Vous récupérez une partie de votre {red}argent sale{default} en même temps que votre {olive}paie{default} pour que cela passe {red}inaperçu{default}.", g_bPrefix);
+						CPrintToChat(i, "%s : Vous récupérez {olive}%i€{unique} de votre {red}argent sale{unique} en même temps que votre {olive}paie{unique} pour que cela passe {red}inaperçu{unique}.", g_bPrefix, dirtyMoneyDailyAmount);
 					}
 				}
 				else
@@ -2558,6 +2573,11 @@ public IsWildlings(client)
 	return ClientHasJob(11, client);
 }
 
+public IsMaire(client)
+{
+	return ClientHasJob(12, client) && ClientHasRank(1, client);
+}
+
 public IsTriades(client)
 {
 	if (jobid[client] == 3)
@@ -2681,7 +2701,7 @@ public Action:Command_Rename(client, args)
 		
 		if (args <= 0)
 		{
-			CPrintToChat(client, "%s : veuillez indiquer votre {olive}prénom {default}et votre {olive}nom{default}", g_bPrefixDev);
+			CPrintToChat(client, "%s : veuillez indiquer votre {olive}prénom {unique}et votre {olive}nom{unique}", g_bPrefixDev);
 			return Plugin_Handled;
 		}
 		
@@ -2835,6 +2855,10 @@ public OnClientDisconnect(client)
 		g_Count[client] = 0.0;
 		playerIds[client] = 0;
 		PrintToServer("Player Disconnect");
+		if (IsMaire(client)) {
+			mayorAlive = false;
+			CPrintToChatAll("%s : Le Maire {olive}%N{unique} vient malheureusement de nous {red}quitter{unique} ! Il est désormais possible de procéder à un nouveau vote pour élire un Maire !", g_bPrefix, client);
+		}
 		
 		RemoveImprimante(client, SteamId);
 		RemovePlante(client, SteamId);
@@ -2986,7 +3010,7 @@ public Action:Timer_Dead(Handle:timer, any:client)
 					disarm(client);
 					GivePlayerItem(client, "weapon_knife");
 				}
-				else if (IsDetectiveLeader(client))
+				else if (IsDetectiveLeader(client) || IsMaire(client))
 				{
 					CS_SwitchTeam(client, 3);
 					CS_RespawnPlayer(client);
@@ -4253,22 +4277,22 @@ public Action:Command_Lock(client, args)
 						} else if (rank_id == -1 && job_id != -1 && job_id == jobid[client] && GetClientJobID(client) != 1) {
 							lockdoor(Ent, client);
 						} else {
-							CPrintToChat(client, "%s : Vous {red}n'avez pas{default} les clefs de cette porte.", g_bPrefix);
+							CPrintToChat(client, "%s : Vous {red}n'avez pas{unique} les clefs de cette porte.", g_bPrefix);
 						}
 					} else {
-						CPrintToChat(client, "%s : Vous {red}n'avez pas{default} les clefs de cette porte.", g_bPrefix);
+						CPrintToChat(client, "%s : Vous {red}n'avez pas{unique} les clefs de cette porte.", g_bPrefix);
 					}
 					g_kvDoors.Rewind();
 				}
 			}
 			else
 			{
-				CPrintToChat(client, "%s : Vous devez {red}viser{default} une porte.", g_bPrefix);
+				CPrintToChat(client, "%s : Vous devez {red}viser{unique} une porte.", g_bPrefix);
 			}
 		}
 		else
 		{
-			CPrintToChat(client, "%s : Vous devez {red}viser{default} une porte.", g_bPrefix);
+			CPrintToChat(client, "%s : Vous devez {red}viser{unique} une porte.", g_bPrefix);
 		}
 	}
 
@@ -4317,22 +4341,22 @@ public Action:Command_Unlock(client, args)
 						} else if (rank_id == -1 && job_id != -1 && job_id == jobid[client] && GetClientJobID(client) != 1) {
 							unlockdoor(Ent, client);
 						} else {
-							CPrintToChat(client, "%s : Vous {red}n'avez pas{default} les clefs de cette porte.", g_bPrefix);
+							CPrintToChat(client, "%s : Vous {red}n'avez pas{unique} les clefs de cette porte.", g_bPrefix);
 						}
 					} else {
-						CPrintToChat(client, "%s : Vous {red}n'avez pas{default} les clefs de cette porte.", g_bPrefix);
+						CPrintToChat(client, "%s : Vous {red}n'avez pas{unique} les clefs de cette porte.", g_bPrefix);
 					}
 					g_kvDoors.Rewind();
 				}
 			}
 			else
 			{
-				CPrintToChat(client, "%s : Vous devez {red}viser{default} une porte.", g_bPrefix);
+				CPrintToChat(client, "%s : Vous devez {red}viser{unique} une porte.", g_bPrefix);
 			}
 		}
 		else
 		{
-			CPrintToChat(client, "%s : Vous devez {red}viser{default} une porte.", g_bPrefix);
+			CPrintToChat(client, "%s : Vous devez {red}viser{unique} une porte.", g_bPrefix);
 		}
 	}
 
@@ -4412,7 +4436,7 @@ public lockdoor(porte, client)
 	{
 		Entity_Lock(porte);
 		EmitSoundToAll("doors/default_locked.wav", porte, SNDCHAN_AUTO, SNDLEVEL_NORMAL);
-		CPrintToChat(client, "%s : Vous avez {red}verouillé{default} la porte.", g_bPrefix);
+		CPrintToChat(client, "%s : Vous avez {red}verouillé{unique} la porte.", g_bPrefix);
 	}
 }
 
@@ -4422,7 +4446,7 @@ public unlockdoor(porte, client)
 	{
 		Entity_UnLock(porte);
 		EmitSoundToAll("doors/latchunlocked1.wav", porte, SNDCHAN_AUTO, SNDLEVEL_NORMAL);
-		CPrintToChat(client, "%s : Vous avez {olive}déverrouillé{default} la porte.", g_bPrefix);
+		CPrintToChat(client, "%s : Vous avez {olive}déverrouillé{unique} la porte.", g_bPrefix);
 	}
 }
 
@@ -5624,28 +5648,28 @@ public Action:Say(client, String:command[], args)
 			{
 				if (GetClientTeam(client) == 2)
 				{
-					CPrintToChatAll("{red}%s{default} - {gray}%N {default}: %s", JobName, client, Arg);
+					CPrintToChatAll("{red}%s{unique} - {gray}%N {default}: %s", JobName, client, Arg);
 					return Plugin_Handled;
 				}
 				else if (GetClientTeam(client) == 3)
 				{
-					CPrintToChatAll("{blue}%s{default} - {gray}%N {default}: %s", JobName, client, Arg);
+					CPrintToChatAll("{blue}%s{unique} - {gray}%N {default}: %s", JobName, client, Arg);
 					return Plugin_Handled;
 				}
 			}
 			else if (channelle[client] == 2)
 			{
-				CPrintToChatAll("{gray}ANNONCES{default} - {gray}%N {default}: %s", client, Arg);
+				CPrintToChatAll("{gray}ANNONCES{unique} - {gray}%N {default}: %s", client, Arg);
 				return Plugin_Handled;
 			}
 			else if (channelle[client] == 3)
 			{
-				CPrintToChatAll("{olive}COMMERCE{default} - {gray}%N {default}: %s", client, Arg);
+				CPrintToChatAll("{olive}COMMERCE{unique} - {gray}%N {default}: %s", client, Arg);
 				return Plugin_Handled;
 			}
 			else if (channelle[client] == 4)
 			{
-				CPrintToChatAll("{red}ADMIN{default} - {gray}%N {default}: %s", client, Arg);
+				CPrintToChatAll("{red}ADMIN{unique} - {gray}%N {default}: %s", client, Arg);
 				return Plugin_Handled;
 			}
 		}
@@ -5673,11 +5697,11 @@ public Action:Say_Team(client, String:command[], args)
 					{
 						if (!IsInCellules(client))
 						{
-							CPrintToChatEx(i, client, "{unusual}PROXIMITÉ{default} - {teamcolor}%N : {default}%s", client, Arg);
+							CPrintToChatEx(i, client, "{unusual}PROXIMITÉ{unique} - {teamcolor}%N : {default}%s", client, Arg);
 						}
 						else
 						{
-							CPrintToChatEx(i, client, "{red}PRISON{default} - {teamcolor}%N : {default}%s", client, Arg);
+							CPrintToChatEx(i, client, "{red}PRISON{unique} - {teamcolor}%N : {default}%s", client, Arg);
 						}
 					}
 				}
@@ -6055,10 +6079,10 @@ public Menu_Bank(Handle:menu, MenuAction:action, client, param2)
 						SetEntityRenderColor(client, 0, 255, 0, 0);
 						SetEntityMoveType(client, MOVETYPE_NONE);
 					} else {
-						CPrintToChat(client, "%s : Vous devez faire face à un {olive}distributeur{default}.", g_bPrefix);
+						CPrintToChat(client, "%s : Vous devez faire face à un {olive}distributeur{unique}.", g_bPrefix);
 					}
 				} else {
-					CPrintToChat(client, "%s : Vous devez faire face à un {olive}distributeur{default}.", g_bPrefix);
+					CPrintToChat(client, "%s : Vous devez faire face à un {olive}distributeur{unique}.", g_bPrefix);
 				}
 			}
 		}
@@ -6251,10 +6275,10 @@ public Action:Timer_VerifyATM(Handle:timer, any:client)
 		if (StrContains(name, "hacked_distributeur_") != -1) {
 			DispatchKeyValue(Entiter[client], "targetname", "distributeur");
 			new primeAmount = 500;
-			CPrintToChat(client, "%s : Vous avez retiré un {red}dispositif illégal{default} attaché au {olive}distributeur{default} et vous empochez une prime de {olive}%i€{default} subventionnée par la ville !", g_bPrefix, primeAmount);
+			CPrintToChat(client, "%s : Vous avez retiré un {red}dispositif illégal{unique} attaché au {olive}distributeur{unique} et vous empochez une prime de {olive}%i€{unique} subventionnée par la ville !", g_bPrefix, primeAmount);
 			money[client] += primeAmount;
 		} else {
-			CPrintToChat(client, "%s : Le {olive}distributeur{default} est aux normes !", g_bPrefix);
+			CPrintToChat(client, "%s : Le {olive}distributeur{unique} est aux normes !", g_bPrefix);
 		}
 		
 		SetEntityMoveType(client, MOVETYPE_WALK);
@@ -6952,7 +6976,7 @@ public Action:Command_Crocheter(client, Args)
 
 								if (distance > 80)
 								{
-									CPrintToChat(client, "%s : Vous êtes trop {red}loin {default}pour crocheter cette porte.", g_bPrefix);
+									CPrintToChat(client, "%s : Vous êtes trop {red}loin {unique}pour crocheter cette porte.", g_bPrefix);
 								}
 								else
 								{
@@ -6969,7 +6993,7 @@ public Action:Command_Crocheter(client, Args)
 									TE_SetupBeamRingPoint(vec, 5.0, 800.0, g_modelLaser, g_modelHalo, 0, 15, 0.6, 15.0, 0.0, ColorCrochetage, 10, 0);
 									TE_SendToAll();
 									
-									CPrintToChat(client, "%s : Vous {red}crochetez {default}la porte.", g_bPrefix);
+									CPrintToChat(client, "%s : Vous {red}crochetez {unique}la porte.", g_bPrefix);
 																		
 									crochetageon[client] = true;
 								}
@@ -7191,17 +7215,25 @@ public Action:Command_Pickpocket(client, Args)
 									SetClientReputation(client, newReputation);
 								} else {
 									vol[client] = GetTime();
-									CPrintToChat(client, "%s : Votre tentative de pickpocket a {red}échouée{default}.", g_bPrefix);
+									CPrintToChat(client, "%s : Votre tentative de pickpocket a {red}échouée{unique}.", g_bPrefix);
 								}
 							}
+						} else {
+							CPrintToChat(client, "%s : Votre {red}ne pouvez pas{unique} dérobé des objets aux membres des Wildlings.", g_bPrefix);
 						}
+					} else {
+						CPrintToChat(client, "%s : Vous êtes trop loin pour {red}faire les poches{unique} à cette personnes.", g_bPrefix);
 					}
+				} else {
+					CPrintToChat(client, "%s : Vous devez faire les poches aux {red}humains{unique} ...", g_bPrefix);
 				}
-			}			
+			} else {
+				CPrintToChat(client, "%s : Vous n'avez pas le {red}l'audace{unique} de faire cela", g_bPrefix);
+			}
 		}
 		else
 		{
-			CPrintToChat(client, "%s : Vous ne pouvez pas volé en jail.", g_bPrefix);
+			CPrintToChat(client, "%s : Vous ne pouvez pas volé en prison.", g_bPrefix);
 		}
 	}
 	
@@ -7418,7 +7450,7 @@ public Action:Timer_Piratage(Handle:timer, any:client)
 					}
 					new finalAmountCapital = random/3;
 					new finalAmountClient = finalAmountCapital * 2;
-					CPrintToChat(client, "%s : Vous avez {red}piraté{default} le distributeur ! Vous dérobez {olive}%i€{default} au capital de l'entreprise {red}%s{default}. Un tiers de l'argent va dans le capital de votre entreprise", g_bPrefix, random, JobName);
+					CPrintToChat(client, "%s : Vous avez {red}piraté{unique} le distributeur ! Vous dérobez {olive}%i€{unique} au capital de l'entreprise {red}%s{unique}. Un tiers de l'argent va dans le capital de votre entreprise", g_bPrefix, random, JobName);
 				
 					ClientDirtyMoneyTransaction(client, finalAmountClient);
 					new newReputation = GetClientReputation(client) - GetRandomInt(1, 3);
@@ -7429,7 +7461,7 @@ public Action:Timer_Piratage(Handle:timer, any:client)
 					SauvegardeCapital(capitalID);
 					SauvegardeCapital(jobid[client]);
 				} else {
-					CPrintToChat(client, "%s : Vous avez {red}piraté{default} le distributeur ! {red}Malheureusement{default} vous avez tenté de voler de l'argent au capital de l'entreprise {red}%s{default} qui n'a plus un sous ! Soyez plus vigilent la prochaine fois.", g_bPrefix, JobName);
+					CPrintToChat(client, "%s : Vous avez {red}piraté{unique} le distributeur ! {red}Malheureusement{unique} vous avez tenté de voler de l'argent au capital de l'entreprise {red}%s{unique} qui n'a plus un sous ! Soyez plus vigilent la prochaine fois.", g_bPrefix, JobName);
 				}
 			}
 		
@@ -7659,7 +7691,7 @@ public Menu_GiveItem(Handle:Item, MenuAction:action, client, param2)
 				SetEntProp(ent, Prop_Send, "m_usSolidFlags", 8);
 				SetEntProp(ent, Prop_Send, "m_CollisionGroup", 11);
 				RemoveFromInventory(client, itemID, itemUsed, 1);
-				CPrintToChat(client, "%s : Vous avez sorti : {olive}%s{default} de votre sac.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous avez sorti : {olive}%s{unique} de votre sac.", g_bPrefix, itemUsed);
 				BuildGiveItemMenu(client);
 			}
 		} 
@@ -7763,92 +7795,92 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				SetDrogue(client, 6, 6, TIME_CHAMPIGNONS);
-				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 2:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				SetDrogue(client, 4, 4, TIME_METH);
-				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 18:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				SetDrogue(client, 1, 1, TIME_SHIT);
-				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 19:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				SetDrogue(client, 2, 2, TIME_COCAINE);
-				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 4:
 			{
 				if (LockPickDoor(client, false)) {
 					RemoveFromInventory(client, itemID, itemUsed, 1);
-					CPrintToChat(client, "%s : Vous être entrain de forcer une porte avec votre {red}%s{default}.", g_bPrefix, itemUsed);
+					CPrintToChat(client, "%s : Vous être entrain de forcer une porte avec votre {red}%s{unique}.", g_bPrefix, itemUsed);
 				}
 			}
 			case 5:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_ak47", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 7:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_m4a1", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 8:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_m3", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 9:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_scout", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 10:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_awp", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 11:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_aug", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 12:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_glock", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 13:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_usp", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 14:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_deagle", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 15:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				Client_GiveWeaponAndAmmo(client, "weapon_fiveseven", true, 0);
-				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{default}.", g_bPrefix, itemUsed);
+				CPrintToChat(client, "%s : Vous venez de sortir votre {red}%s{unique}.", g_bPrefix, itemUsed);
 			}
 			case 16:
 			{
@@ -7858,20 +7890,20 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 			{
 				if (LockPickDoor(client, true)) {
 					RemoveFromInventory(client, itemID, itemUsed, 1);
-					CPrintToChat(client, "%s : Vous être entrain de forcer une porte avec votre {red}%s{default}.", g_bPrefix, itemUsed);
+					CPrintToChat(client, "%s : Vous être entrain de forcer une porte avec votre {red}%s{unique}.", g_bPrefix, itemUsed);
 				}				
 			}
 			case 20:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				SetEntProp(client, Prop_Send, "m_bHasNightVision", 1);
-				CPrintToChat(client, "%s : Vous êtes équipé de {red}%s{default}.", g_bPrefix, itemUsed);				
+				CPrintToChat(client, "%s : Vous êtes équipé de {red}%s{unique}.", g_bPrefix, itemUsed);				
 			}
 			case 22:
 			{
 				RemoveFromInventory(client, itemID, itemUsed, 1);
 				BuildPCMenu(client, true);
-				CPrintToChat(client, "%s : Vous avez utiliser une {red}%s{default}. {red}Attention ! Ceci est à usage unique{default}.", g_bPrefix, itemUsed);				
+				CPrintToChat(client, "%s : Vous avez utiliser une {red}%s{unique}. {red}Attention ! Ceci est à usage unique{unique}.", g_bPrefix, itemUsed);				
 			}
 			case 24:
 			{
@@ -7883,7 +7915,7 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 			{
 				if (ReloadWeaponAmmos(client)) {
 					RemoveFromInventory(client, itemID, itemUsed, 1);
-					CPrintToChat(client, "%s : Vous venez d'utiliser des {olive}%s{default}.", g_bPrefix, itemUsed);
+					CPrintToChat(client, "%s : Vous venez d'utiliser des {olive}%s{unique}.", g_bPrefix, itemUsed);
 				}
 			}
 		}
@@ -7907,12 +7939,12 @@ public ApplyCardSkimmer (client) {
 				SetEntityMoveType(client, MOVETYPE_NONE);
 				return true;
 			} else if (StrContains(name, "hacked_distributeur_") != -1) {
-				CPrintToChat(client, "%s : Un {red}dispositif Card Skimmer{default} est déjà installé sur ce distributeur.", g_bPrefix);
+				CPrintToChat(client, "%s : Un {red}dispositif Card Skimmer{unique} est déjà installé sur ce distributeur.", g_bPrefix);
 			} else {
-				CPrintToChat(client, "%s : Vous devez faire face à un {olive}distributeur{default}.", g_bPrefix);
+				CPrintToChat(client, "%s : Vous devez faire face à un {olive}distributeur{unique}.", g_bPrefix);
 			}
 		} else {
-			CPrintToChat(client, "%s : Vous devez faire face à un {olive}distributeur{default}.", g_bPrefix);
+			CPrintToChat(client, "%s : Vous devez faire face à un {olive}distributeur{unique}.", g_bPrefix);
 		}
 	}
 	return false;
@@ -7928,9 +7960,9 @@ public Action:Timer_SetCardSkimmer(Handle:timer, any:client)
 		if (StrEqual(name, "distributeur")) {
 			Format(newDistribName, sizeof(newDistribName), "hacked_distributeur_%i_%i", client, playerIds[client]);
 			DispatchKeyValue(Entiter[client], "targetname", newDistribName);
-			CPrintToChat(client, "%s : Vous avez placer le {red}dispositif Card Skimmer{default} sur le distributeur avec succès !", g_bPrefix);
+			CPrintToChat(client, "%s : Vous avez placer le {red}dispositif Card Skimmer{unique} sur le distributeur avec succès !", g_bPrefix);
 		} else {
-			CPrintToChat(client, "%s : Un {red}dispositif Card Skimmer{default} est déjà installé sur ce distributeur.", g_bPrefix);
+			CPrintToChat(client, "%s : Un {red}dispositif Card Skimmer{unique} est déjà installé sur ce distributeur.", g_bPrefix);
 		}
 		
 		SetEntityMoveType(client, MOVETYPE_WALK);
@@ -7961,7 +7993,7 @@ public ReloadWeaponAmmos (client) {
 		}
 		else
 		{
-			CPrintToChat(client, "%s : Vous devez porter une {red}arme à feu{default} pour utiliser ces {olive}munitions{default} !", g_bPrefix);
+			CPrintToChat(client, "%s : Vous devez porter une {red}arme à feu{unique} pour utiliser ces {olive}munitions{unique} !", g_bPrefix);
 			return false;
 		}
 	}
@@ -7993,7 +8025,7 @@ public LockPickDoor (client, isKit) {
 				IntToString(HammerID, hammerIdBuffer, sizeof(hammerIdBuffer));
 				new doorKeyCode = GetDoorKeyCode(hammerIdBuffer);
 				if (doorKeyCode != -1 && doorKeyCode != -2) {
-					CPrintToChat(client, "%s : Vous ne {red}pouvez pas{default} forcer cette porte car elle est équipée d'une {olive}serrure électronique{default} !", g_bPrefix);
+					CPrintToChat(client, "%s : Vous ne {red}pouvez pas{unique} forcer cette porte car elle est équipée d'une {olive}serrure électronique{unique} !", g_bPrefix);
 					return false;
 				}
 				if (Entity_IsLocked(Entiter[client]))
@@ -8083,15 +8115,15 @@ public ElectronicLock (client) {
 				if (GetDoorKeyCode(HammerId) == -1) {
 					BuildKeypadMenu(client, HammerId);
 				} else {
-					CPrintToChat(client, "%s : Cette porte possède déjà une {olive}serrure électronique{default} !", g_bPrefix);
+					CPrintToChat(client, "%s : Cette porte possède déjà une {olive}serrure électronique{unique} !", g_bPrefix);
 					return false;
 				}
 			} else {
-				CPrintToChat(client, "%s : Vous ne {red}pouvez pas{default} mettre de {olive}serrure électronique{default} sur cette porte car elle ne vous appartient pas !", g_bPrefix);
+				CPrintToChat(client, "%s : Vous ne {red}pouvez pas{unique} mettre de {olive}serrure électronique{unique} sur cette porte car elle ne vous appartient pas !", g_bPrefix);
 				return false;
 			}
 		} else {
-			CPrintToChat(client, "%s : Vous ne {red}pouvez pas{default} mettre de {olive}serrure électronique{default} sur ça !", g_bPrefix);
+			CPrintToChat(client, "%s : Vous ne {red}pouvez pas{unique} mettre de {olive}serrure électronique{unique} sur ça !", g_bPrefix);
 			return false;
 		}
 	}
@@ -8112,7 +8144,7 @@ public IsProperty (client, String:HammerID[]) {
 		if (StrEqual(ownerSteamId, SteamId, false)) {
 			return true;
 		} else {
-			CPrintToChat(client, "%s : Cette porte ne vous {red}appartient pas{default} !", g_bPrefix);
+			CPrintToChat(client, "%s : Cette porte ne vous {red}appartient pas{unique} !", g_bPrefix);
 			return false;
 		}
 	}
@@ -8188,7 +8220,7 @@ public Menu_Keypad(Handle:menu, MenuAction:action, client, param2)
 		if (strlen(keyCode) >= 4) {
 			if (SetKeyCode(hammerID, StringToInt(keyCode), client)) {
 				CloseHandle(menu);
-				CPrintToChat(client, "%s : Vous avez équipé cette porte d'une {olive}serrure électronique{default} avec le code : {red}%s{default} !", g_bPrefix, keyCode);
+				CPrintToChat(client, "%s : Vous avez équipé cette porte d'une {olive}serrure électronique{unique} avec le code : {red}%s{unique} !", g_bPrefix, keyCode);
 				return menu;
 			}
 		} else {
@@ -8298,16 +8330,16 @@ public Menu_TypeKeypad(Handle:menu, MenuAction:action, client, param2)
 								lockdoor(Ent, client);
 							}
 						} else {
-							CPrintToChat(client, "%s : Vous devez faire face à la {olive}porte{default} que vous essayer d'ouvrir !", g_bPrefix);
+							CPrintToChat(client, "%s : Vous devez faire face à la {olive}porte{unique} que vous essayer d'ouvrir !", g_bPrefix);
 						}
 					} else {
-						CPrintToChat(client, "%s : Vous devez faire face à une {olive}porte{default} !", g_bPrefix);
+						CPrintToChat(client, "%s : Vous devez faire face à une {olive}porte{unique} !", g_bPrefix);
 					}
 				} else {
-					CPrintToChat(client, "%s : Vous devez faire face à la {olive}porte{default} !", g_bPrefix);
+					CPrintToChat(client, "%s : Vous devez faire face à la {olive}porte{unique} !", g_bPrefix);
 				}
 			} else {
-				CPrintToChat(client, "%s : Le code que vous avez saisis est {red}erroné{default} !", g_bPrefix);
+				CPrintToChat(client, "%s : Le code que vous avez saisis est {red}erroné{unique} !", g_bPrefix);
 			}
 			CloseHandle(menu);
 			return menu;
@@ -8454,7 +8486,7 @@ Handle:BuildAutoSellMenu(client)
 			KvGetSectionName(g_kvItems, ItemID, sizeof(ItemID));
 			g_kvItems.GetString("item_name", ItemName, sizeof(ItemName));
 			new id = StringToInt(ItemID);
-			Format(ItemName, sizeof(ItemName), "%s", ItemName);
+			Format(ItemName, sizeof(ItemName), "%s - %i€", ItemName, price);
 			Format(Buffer, sizeof(Buffer), "%i_%i_%s", id, price, ItemName);
 			AddMenuItem(menu, Buffer, ItemName);
 			i++;
@@ -8716,7 +8748,7 @@ Handle:BuildSellActivityMenu(client, Player)
 					KvGetSectionName(g_kvActivities, ItemID, sizeof(ItemID));
 					g_kvActivities.GetString("activity_name", ItemName, sizeof(ItemName));
 					new id = StringToInt(ItemID);
-					Format(ItemName, sizeof(ItemName), "%s", ItemName);
+					Format(ItemName, sizeof(ItemName), "%s - %i€", ItemName, price);
 					Format(Buffer, sizeof(Buffer), "%i_%i_%i_%s", Player, id, price, ItemName);
 					AddMenuItem(menu, Buffer, ItemName);
 					i++;
@@ -8962,7 +8994,7 @@ Handle:BuildSellMenu(client, Player)
 			KvGetSectionName(g_kvItems, ItemID, sizeof(ItemID));
 			g_kvItems.GetString("item_name", ItemName, sizeof(ItemName));
 			new id = StringToInt(ItemID);
-			Format(ItemName, sizeof(ItemName), "%s", ItemName);
+			Format(ItemName, sizeof(ItemName), "%s - %i€", ItemName, price);
 			Format(Buffer, sizeof(Buffer), "%i_%i_%i_%s", Player, id, price, ItemName);
 			AddMenuItem(menu, Buffer, ItemName);
 			i++;
@@ -9464,7 +9496,7 @@ public RobItem (client, entity) {
 				PrintToServer("Item Name : %s", itemName);
 				RemoveFromInventory(entity, StringToInt(itemID), itemName, 1);
 				SaveInventory(client, StringToInt(itemID), itemName, 1);
-				CPrintToChat(client, "%s : Vous avez dérobé {red}1{default} {olive}%s{default}.", g_bPrefix, itemName);
+				CPrintToChat(client, "%s : Vous avez dérobé {red}1{unique} {olive}%s{unique}.", g_bPrefix, itemName);
 				delete kv;
 				return hasRobbed;
 			}
@@ -10463,7 +10495,7 @@ public Menu_Convocation(Handle:menu, MenuAction:action, client, param2)
 		
 		if (IsValid(convoquer[client]))
 		{
-			CPrintToChatAll("({aqua}JUSTICE{unique}) :{fullred} %N {default}est convoqué par{aqua} Mr.%N {unique}au tribunal.", convoquer[client], client);
+			CPrintToChatAll("({aqua}JUSTICE{unique}) :{fullred} %N {unique}est convoqué par{aqua} Mr.%N {unique}au tribunal.", convoquer[client], client);
 			
 			for (new i = 1; i <= MaxClients; i++)
 			{
@@ -10520,7 +10552,7 @@ public Action:Command_Fakejob(client, args)
 			GetClanTagName(client, rankid[client], jobid[client], ClanTagRankName, sizeof(ClanTagRankName));
 			CS_SetClientClanTag(client, ClanTagRankName);
 			IsInFakeJob[client] = true;
-			CPrintToChat(client, "%s : Vous êtes sous {blue}couverture{default} en tant que {blue}%s{default} !", g_bPrefix, ClanTagRankName);
+			CPrintToChat(client, "%s : Vous êtes sous {blue}couverture{unique} en tant que {blue}%s{unique} !", g_bPrefix, ClanTagRankName);
 			EmitSoundToClient(client, "sound/roleplay/sound_effects/couverture.mp3");
 		} else {
 			decl String:ClanTagRankName[40];
@@ -10533,7 +10565,7 @@ public Action:Command_Fakejob(client, args)
 				CS_SwitchTeam(client, 3);
 			}
 			IsInFakeJob[client] = false;
-			CPrintToChat(client, "%s : Vous n'êtes {red}plus{default} sous {blue}couverture{default} !", g_bPrefix);
+			CPrintToChat(client, "%s : Vous n'êtes {red}plus{unique} sous {blue}couverture{unique} !", g_bPrefix);
 		}	
 		
 	}
@@ -11662,7 +11694,7 @@ public Action:Command_Validarea(client, args)
 		{
 			if (args <= 1)
 			{
-				CPrintToChat(client, "%s : veuillez indiquer le job_id et le nom de la planque a qui doit appartenir cette {red}planque{default}.", g_bPrefixDev);
+				CPrintToChat(client, "%s : veuillez indiquer le job_id et le nom de la planque a qui doit appartenir cette {red}planque{unique}.", g_bPrefixDev);
 				return Plugin_Handled;
 			}
 			decl String:arg1[128]; 
@@ -11783,7 +11815,7 @@ public Action:Command_Setspawn(client, args)
 				SQL_GetError(database, error, sizeof(error));
 				PrintToServer("Failed to query from setspawn (error: %s)", error);
 			} else {
-				CPrintToChat(client, "%s : Vous venez de créer le spawn {olive}%s{default} !", g_bPrefix, spawnName);
+				CPrintToChat(client, "%s : Vous venez de créer le spawn {olive}%s{unique} !", g_bPrefix, spawnName);
 			}
 			SQL_UnlockDatabase(database);
 			CloseHandle(database);
@@ -11813,10 +11845,10 @@ public Action:Command_Buy(client, args)
 				SQL_TQuery(g_ThreadedHandle, CallbackBuyDoor, buffer, client);
 
 			} else {
-				CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{default} ça !", g_bPrefix);
+				CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{unique} ça !", g_bPrefix);
 			}
 		} else {
-			CPrintToChat(client, "%s : Vous {red}devez{default} être face à une porte !", g_bPrefix);
+			CPrintToChat(client, "%s : Vous {red}devez{unique} être face à une porte !", g_bPrefix);
 		}
 	}
 	
@@ -11855,13 +11887,13 @@ public Action:Command_Buygroup(client, args)
 						SQL_TQuery(g_ThreadedHandle, CallbackBuyDoor, buffer, client);
 
 					} else {
-						CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{default} ça !", g_bPrefix);
+						CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{unique} ça !", g_bPrefix);
 					}
 				} else { 
-					CPrintToChat(client, "%s : Utilisation de la commande {red}/buygroup {jobid} [{rankid}]{default}.", g_bPrefixDev);
+					CPrintToChat(client, "%s : Utilisation de la commande {red}/buygroup {jobid} [{rankid}]{unique}.", g_bPrefixDev);
 				} 
 			} else {
-				CPrintToChat(client, "%s : Vous {red}devez{default} être face à une porte !", g_bPrefix);
+				CPrintToChat(client, "%s : Vous {red}devez{unique} être face à une porte !", g_bPrefix);
 			}
 		}
 	}
@@ -11882,10 +11914,10 @@ public Action:Command_Camera(client, args)
 				Client_SetObserverMode(client, OBS_MODE_NONE, false);
 				Client_SetDrawViewModel(client, true);
 				Client_SetFOV(client, 90);
-				CPrintToChat(client, "%s : Vous {red}n'êtes plus{default} entrain de regarder à travers votre {olive}webcam{default}.", g_bPrefix);
+				CPrintToChat(client, "%s : Vous {red}n'êtes plus{unique} entrain de regarder à travers votre {olive}webcam{unique}.", g_bPrefix);
 			}
 		} else {
-			CPrintToChat(client, "%s : Il vous faut un {olive}Controleur de webcam a distance{default} pour pouvoir consulter votre {olive}webcam{default}.", g_bPrefix);
+			CPrintToChat(client, "%s : Il vous faut un {olive}Controleur de webcam a distance{unique} pour pouvoir consulter votre {olive}webcam{unique}.", g_bPrefix);
 		}
 		
 	}
@@ -11951,10 +11983,139 @@ public Menu_SelectPC(Handle:Pc, MenuAction:action, client, param2)
 			Client_SetObserverMode(client, OBS_MODE_DEATHCAM, false);
 			Client_SetDrawViewModel(client, false);
 			Client_SetFOV(client, 120);
-			CPrintToChat(client, "%s : Vous êtes entrain de {olive}regarder{default} à travers la {olive}webcam{default}.", g_bPrefix);
+			CPrintToChat(client, "%s : Vous êtes entrain de {olive}regarder{unique} à travers la {olive}webcam{unique}.", g_bPrefix);
 		} else {
-			CPrintToChat(client, "%s : Vous ne pouvez regarder à travers {red}aucune Webcam{default}.", g_bPrefix);
+			CPrintToChat(client, "%s : Vous ne pouvez regarder à travers {red}aucune Webcam{unique}.", g_bPrefix);
 		}
+	}
+}
+
+public Action:Command_Mayor(client, args)
+{
+	if (!mayorAlive) {
+		if (IsValidAndAlive(client))
+		{
+			if (IsNotInJail(client)) {
+				mayorCandidate[client] = true;
+				if (!mayorTimer) {
+					mayorTimer = true;
+					mayorVote = CreateTimer(20.0, Timer_MayorVote, 0, TIMER_REPEAT);
+					CPrintToChatAll("%s : L'élection de Maire va débuter dans 1 minute suite à la candidature de {olive}%N{unique} !", g_bPrefix, client);
+				} else {
+					CPrintToChatAll("%s : {olive}%N{unique} se présente également à l'élection de Maire !", g_bPrefix, client);
+				}
+				CPrintToChat(client, "%s : Votre {olive}candidature{unique} en tant que {olive}Maire{unique} à bien été prise en compte !", g_bPrefix);
+			}
+			
+		}
+	} else {
+		CPrintToChat(client, "%s : Le {olive}Maire{unique} est encore présent !", g_bPrefix);
+	}
+	
+	return Plugin_Handled;
+}
+
+public Action:Timer_MayorVote(Handle:timer, any:client)
+{
+	for (new i = 1; i <= MaxClients; i++) {
+		if (IsValid(i)) {
+			BuildMayorVoteMenu(i);
+		}
+	}
+		
+	KillTimer(mayorVote);
+
+	chooseMayor = CreateTimer(20.0, Timer_ChooseMayor, 0, TIMER_REPEAT);
+}
+
+public Action:Timer_ChooseMayor(Handle:timer, any:client)
+{	
+	PrintToServer("Choose Mayor timer");
+	new mayorWithMostVotes = 0;
+	new secondMostVotes = 0;
+	for (new i = 1; i <= MaxClients; i++) {
+		if (IsValid(i)) {
+			if (IsValid(votedForMayor[i])) {
+				if (mayorWithMostVotes == 0) {
+					mayorWithMostVotes = votedForMayor[i];
+				}
+				if (secondMostVotes == 0 && votedForMayor[i] != mayorWithMostVotes) {
+					secondMostVotes = votedForMayor[i];
+				}
+				mayorCount[votedForMayor[i]] += 1;
+				if (mayorCount[votedForMayor[i]] > mayorCount[mayorWithMostVotes]) {
+					secondMostVotes = mayorWithMostVotes;
+					mayorWithMostVotes = votedForMayor[i];
+				}
+			}
+		}
+	}
+
+	PrintToServer("%N : %i & %N : %i", mayorWithMostVotes, mayorCount[mayorWithMostVotes], secondMostVotes, mayorCount[secondMostVotes]);
+
+	if (mayorCount[mayorWithMostVotes] > mayorCount[secondMostVotes]) {
+		IsInFakeJob[mayorWithMostVotes] = true;
+		beforeCouvertureJobId[mayorWithMostVotes] = GetClientJobID(mayorWithMostVotes);
+		beforeCouvertureRankId[mayorWithMostVotes] = GetClientRankID(mayorWithMostVotes);
+		SetClientJobID(mayorWithMostVotes, 12);
+		SetClientRankID(mayorWithMostVotes, 1);
+		CS_SwitchTeam(mayorWithMostVotes, 3);
+		ChooseSkin(12);
+		InitSalary(mayorWithMostVotes);
+
+		mayorAlive = true;
+
+		CPrintToChatAll("%s : L'éléction de Maire prend fin avec la victoire de {olive}%N{unique} qui a reçu {olive}%i voies{unique} !", g_bPrefix, mayorWithMostVotes, mayorCount[mayorWithMostVotes]);
+	} else {
+		CPrintToChatAll("%s : L'éléction de Maire prend fin sans vainqueur. Les candidats {olive}%N{unique} et {olive}%N{unique} ont reçu le même nombre de voies !", g_bPrefix, mayorWithMostVotes, secondMostVotes);
+	}
+
+	mayorTimer = false;
+
+	for (new i = 1; i <= MaxClients; i++) {
+		if (IsValid(i)) {
+			mayorCount[i] = 0;
+			votedForMayor[i] = 0;
+			mayorCandidate[i] = 0;
+		}
+	}
+	KillTimer(chooseMayor);
+}
+
+Handle:BuildMayorVoteMenu(client)
+{
+	decl String:buffer[128];
+	decl String:path[1000];
+
+	new Handle:Vote = CreateMenu(Menu_VotedMayor);
+	SetMenuTitle(Vote, "Votez pour votre nouveau Maire :");
+
+	for (new i = 1; i <= MaxClients; i++) {
+		if (IsValid(i)) {
+			if (mayorCandidate[i]) {
+				decl String:clientId[128];
+			   	decl String:clientName[128];
+			   	Format(clientId, sizeof(clientId), "%i", i);
+				Format(clientName, sizeof(clientName), "%N", i);
+				AddMenuItem(Vote, clientId, clientName);
+			}
+		}
+	}
+	
+	DisplayMenu(Vote, client, 60);
+	return Vote;
+}
+
+public Menu_VotedMayor(Handle:Vote, MenuAction:action, client, param2)
+{
+	new String:mayorId[64];
+	decl String:Buffer[12][64];
+	GetMenuItem(Vote, param2, mayorId, sizeof(mayorId));
+	if (IsValid(StringToInt(mayorId)) && IsValid(client)) {
+		votedForMayor[client] = StringToInt(mayorId);
+		PrintToServer("Mayor ID as string : %s", mayorId);
+		PrintToServer("Mayor ID : %i", StringToInt(mayorId));
+		CPrintToChat(client, "%s : Votre vote pour l'éléction de {olive}Maire{unique} revient à {olive}%N{unique} !", g_bPrefix, votedForMayor[client]);
 	}
 }
 
@@ -11971,10 +12132,10 @@ public CallbackBuyDoor(Handle:owner, Handle:hndl, const String:error[], any:clie
 	PrintToServer("error : %s", error);
 	if (hndl == null)
 	{
-		CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{default} cette porte.", g_bPrefix);
+		CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{unique} cette porte.", g_bPrefix);
 	} else {
 		ReloadDoorsKV();
-		CPrintToChat(client, "%s : Vous {olive}possédez{default} les clés de cette porte.", g_bPrefix);
+		CPrintToChat(client, "%s : Vous {olive}possédez{unique} les clés de cette porte.", g_bPrefix);
 	}
 }
 
@@ -12268,6 +12429,22 @@ public IsPlayerInHisHideout (client) {
 		{
 			return IsInArmurerie(client);
 		}
+		case 8:
+		{
+			return IsInJustice(client);
+		}
+		case 9:
+		{
+			return IsInHopital(client);
+		}
+		case 10:
+		{
+			return IsInInformatique(client);
+		}
+		case 11:
+		{
+			return IsInWildlings(client);
+		}
 	}
 	return false;
 }
@@ -12347,6 +12524,24 @@ IsInArtificier(client)
 IsInMafia(client)
 {
 	if (StrEqual(ZoneUser[client], "Les Mafieux", false)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+IsInWildlings(client)
+{
+	if (StrEqual(ZoneUser[client], "Repaire des Wildlings", false)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+IsInInformatique(client)
+{
+	if (StrEqual(ZoneUser[client], "Service Informatique", false)) {
 		return true;
 	} else {
 		return false;
