@@ -7194,14 +7194,22 @@ public Action:Command_Pickpocket(client, Args)
 									CPrintToChat(client, "%s : Votre tentative de pickpocket a {red}échouée{default}.", g_bPrefix);
 								}
 							}
+						} else {
+							CPrintToChat(client, "%s : Votre {red}ne pouvez pas{default} dérobé des objets aux membres des Wildlings.", g_bPrefix);
 						}
+					} else {
+						CPrintToChat(client, "%s : Vous êtes trop loin pour {red}faire les poches{default} à cette personnes.", g_bPrefix);
 					}
+				} else {
+					CPrintToChat(client, "%s : Vous devez faire les poches aux {red}humains{default} ...", g_bPrefix);
 				}
-			}			
+			} else {
+				CPrintToChat(client, "%s : Vous n'avez pas le {red}l'audace{default} de faire cela", g_bPrefix);
+			}
 		}
 		else
 		{
-			CPrintToChat(client, "%s : Vous ne pouvez pas volé en jail.", g_bPrefix);
+			CPrintToChat(client, "%s : Vous ne pouvez pas volé en prison.", g_bPrefix);
 		}
 	}
 	
