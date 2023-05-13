@@ -11342,7 +11342,7 @@ public RemoveImprimante(client, const String:SteamId[])
 					
 					if (StrEqual(Buffer[2], "imprim"))
 					{
-						if (StrEqual(Buffer[0], SteamId))
+						if (printer_owner[i] == client)
 						{
 							RemoveEdict(i);
 							KillTimer(printer_timer[i]);
