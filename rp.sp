@@ -47,7 +47,7 @@
 #define LIMIT_IMPRIMANTE	5
 #define LIMIT_IMPRIMANTE_WITH_AMELIORATION	8
 #define LIMIT_PLANTE	3
-#define MONEY_BY_IMPRIMANTE	1
+#define MONEY_BY_IMPRIMANTE	50
 #define TIME_LOCATION	259200
 #define DAYS_LOCATION	3
 #define EF_NODRAW 32
@@ -257,8 +257,11 @@ new clip1Offset = -1;
 new clip2Offset = -1;
 new secAmmoTypeOffset = -1;
 new priAmmoTypeOffset = -1;
+new taxesAmount = 0;
 new CountVirer = 0;
 new printer_owner[2048];
+new printer_timer[2048] = { INVALID_HANDLE, ...};
+new printer_paper[2048];
 new plante_owner[2048];
 
 new ColorTazer[4]		= {102, 102, 204, 255};
@@ -283,6 +286,7 @@ new String:JobNameUser[MAXPLAYERS+1][40];
 new String:RankNameUser[MAXPLAYERS+1][40];
 new String:LastKillBy[MAXPLAYERS+1][90];
 new String:ZoneUser[MAXPLAYERS+1][140];
+new String:ZonePrinter[2048][140];
 
 new Float:g_Count[MAXPLAYERS+1] = 0.0;
 new Float:AFK_TIMER[MAXPLAYERS+1] = 0.0;
@@ -377,7 +381,6 @@ public OnPluginStart()
 	RegConsoleCmd("sm_conv", Command_Convocation);
 	RegConsoleCmd("sm_convocation", Command_Convocation);
 	RegConsoleCmd("sm_jugement", Command_Jugement);
-	RegConsoleCmd("sm_build", Command_Build);
 	RegConsoleCmd("sm_t", Command_Team);
 	RegConsoleCmd("sm_team", Command_Team);
 	RegConsoleCmd("sm_3rd", Command_3rd);
@@ -393,6 +396,11 @@ public OnPluginStart()
 	RegConsoleCmd("sm_buygroup", Command_Buygroup);
 	RegConsoleCmd("sm_camera", Command_Camera);
 	RegConsoleCmd("sm_mayor", Command_Mayor);
+	RegConsoleCmd("sm_impots", Command_Taxes);
+	RegConsoleCmd("sm_impot", Command_Taxes);
+	RegConsoleCmd("sm_taxes", Command_Taxes);
+	RegConsoleCmd("sm_reprogrammer", Command_ChangePrinterOwner);
+	RegConsoleCmd("sm_changeowner", Command_ChangePrinterOwner);
 	
 	RegAdminCmd("sm_givemoney", Command_Givemoney, ADMFLAG_ROOT);
 	
@@ -1371,10 +1379,11 @@ public Action:OnPlayerDeath(Handle:event, const String:name[], bool:dontBroadcas
 				g_CountDead[client] = RESPAWN_TIME;
 
 				if (IsMaire(client)) {
-					CPrintToChatAll("%s : Le Maire {olive}%N{unique} vient malheureusement de nous {red}quitter{unique} ! Il est désormais possible de procéder à un nouveau vote pour élire un Maire !", g_bPrefix, client);
+					CPrintToChatAll("%s : Le Maire {olive}%N{unique} vient malheureusement de nous {red}quitter{unique} ! Il est désormais possible de procéder à un nouveau vote pour élire un Maire !  L'impôt est de retour à {red}0%%{unique}.", g_bPrefix, client);
 					SetClientJobID(client, beforeCouvertureJobId[client]);
 					SetClientRankID(client, beforeCouvertureRankId[client]);
 					mayorAlive = false;
+					taxesAmount = 0;
 				}
 				
 				g_deadtimer[client] = CreateTimer(1.0, Timer_Dead, client, TIMER_REPEAT);
@@ -1769,7 +1778,6 @@ InitializeClientOnDB(client)
 	g_CountDead[client] = RESPAWN_TIME;
 
 	TimerHud[client] = CreateTimer(1.0, HudTimer, client, TIMER_REPEAT);
-	TimerImprimante[client] = CreateTimer(3.0, ImprimanteTimer, client, TIMER_REPEAT);
 	TimerPlante[client] = CreateTimer(600.0, PlanteTimer, client, TIMER_REPEAT);
 	g_deadtimer[client] = CreateTimer(1.0, Timer_Dead, client, TIMER_REPEAT);
 		
@@ -2249,6 +2257,11 @@ public GiveSalary()
 {
 	for (new i = 1; i <= MaxClients; i++)
 	{
+		new salaireClient = salaire[i];
+		new taxes = salaireClient * taxesAmount;
+		if (!IsMaire(i) && !IsPolice(i)) {
+			salaireClient -= taxes;
+		}
 		if (IsValidAndAlive(i) && GetClientTeam(i) > 1)
 		{
 			if (!IsClientInJail(i))
@@ -2256,45 +2269,50 @@ public GiveSalary()
 				if (!AFK[i])
 				{
 					new checkcapital = capital[jobid[i]];
+					if (IsMaire(i)) {
+						checkcapital = 999999;
+					}
 					
-					CPrintToChat(i, "%s : Vous avez reçu votre paie de %i€.", g_bPrefix, salaire[i]);
+					CPrintToChat(i, "%s : Vous avez reçu votre paie de %i€.", g_bPrefix, salaireClient);
 					
 					if (jobid[i] > 1)
 					{
-						if (checkcapital >= salaire[i])
+						if (checkcapital >= salaireClient)
 						{
-							capital[jobid[i]] = checkcapital - salaire[i];
+							if (!IsMaire(i)) {
+								capital[jobid[i]] = checkcapital - salaire[i];
+							}
 							
 							if (HasRib(i))
 							{
 								if (HasCompteCourant(i))
 								{
-									bank[i] += salaire[i];
+									bank[i] += salaireClient;
 									
 									if (HasFicheDePaie(i))
 									{
-										bank[i] += salaire[i];
+										bank[i] += salaireClient;
 									}
 								}
 								else
 								{
-									money[i] += salaire[i];
+									money[i] += salaireClient;
 									CPrintToChat(i, "%s : Pour recevoir votre salaire en Banque, veuillez ouvrir un compte courant.", g_bPrefix);
 									
 									if (HasFicheDePaie(i))
 									{
-										money[i] += salaire[i];
+										money[i] += salaireClient;
 									}
 								}
 							}
 							else
 							{
-								money[i] += salaire[i];
+								money[i] += salaireClient;
 								CPrintToChat(i, "%s : Pour recevoir votre salaire en Banque, veuillez acheter un RIB.", g_bPrefix);
 								
 								if (HasFicheDePaie(i))
 								{
-									money[i] += salaire[i];
+									money[i] += salaireClient;
 								}
 							}
 						}
@@ -2310,32 +2328,32 @@ public GiveSalary()
 						{
 							if (HasCompteCourant(i))
 							{
-								bank[i] += salaire[i];
+								bank[i] += salaireClient;
 								
 								if (HasFicheDePaie(i))
 								{
-									bank[i] += salaire[i];
+									bank[i] += salaireClient;
 								}
 							}
 							else
 							{
-								money[i] += salaire[i];
+								money[i] += salaireClient;
 								CPrintToChat(i, "%s : Pour recevoir votre salaire en Banque, veuillez ouvrir un compte courant.", g_bPrefix);
 								
 								if (HasFicheDePaie(i))
 								{
-									money[i] += salaire[i];
+									money[i] += salaireClient;
 								}
 							}
 						}
 						else
 						{
-							money[i] += salaire[i];
+							money[i] += salaireClient;
 							CPrintToChat(i, "%s : Pour recevoir votre salaire en Banque, veuillez acheter un RIB.", g_bPrefix);
 							
 							if (HasFicheDePaie(i))
 							{
-								money[i] += salaire[i];
+								money[i] += salaireClient;
 							}
 						}
 					}
@@ -2345,6 +2363,9 @@ public GiveSalary()
 						ClientDirtyMoneyTransaction(i, -dirtyMoneyDailyAmount);
 						money[i] += dirtyMoneyDailyAmount;
 						CPrintToChat(i, "%s : Vous récupérez {olive}%i€{unique} de votre {red}argent sale{unique} en même temps que votre {olive}paie{unique} pour que cela passe {red}inaperçu{unique}.", g_bPrefix, dirtyMoneyDailyAmount);
+					}
+					if (!IsMaire(i) && !IsPolice(i)) {
+						capital[2] += taxes;
 					}
 				}
 				else
@@ -2420,6 +2441,18 @@ public SetClientDirtyMoney (client, newDirtyMoney) {
 	dirtyMoney[client] = newDirtyMoney;
 }
 
+public GetPrinterPaper (printer) {
+	return printer_paper[printer];
+}
+
+public SetPrinterPaper (printer, quantity) {
+	printer_paper[printer] = quantity;
+}
+
+public ReloadPrinterPaper (printer) {
+	SetPrinterPaper(printer, 100);
+}
+
 public SetClientJobID (client, jobId) {
 	jobid[client] = jobId;
 }
@@ -2451,7 +2484,7 @@ public IsUnemployed(client)
 
 public IsPolice(client)
 {
-	return ClientHasJob(2, client);
+	return ClientHasJob(2, client) && !ClientHasRank(10, client);
 }
 
 public IsChefPolice(client)
@@ -2575,7 +2608,7 @@ public IsWildlings(client)
 
 public IsMaire(client)
 {
-	return ClientHasJob(12, client) && ClientHasRank(1, client);
+	return ClientHasJob(2, client) && ClientHasRank(10, client);
 }
 
 public IsTriades(client)
@@ -2857,7 +2890,8 @@ public OnClientDisconnect(client)
 		PrintToServer("Player Disconnect");
 		if (IsMaire(client)) {
 			mayorAlive = false;
-			CPrintToChatAll("%s : Le Maire {olive}%N{unique} vient malheureusement de nous {red}quitter{unique} ! Il est désormais possible de procéder à un nouveau vote pour élire un Maire !", g_bPrefix, client);
+			CPrintToChatAll("%s : Le Maire {olive}%N{unique} vient malheureusement de nous {red}quitter{unique} ! Il est désormais possible de procéder à un nouveau vote pour élire un Maire ! L'impôt est de retour à {red}0%{unique}.", g_bPrefix, client);
+			taxesAmount = false;
 		}
 		
 		RemoveImprimante(client, SteamId);
@@ -3273,9 +3307,15 @@ public Action:HudTimer(Handle:timer, any:client)
 			decl String:tmptext7[256];
 			decl String:tmptext8[256];
 			
-			Format(tmptext1, sizeof(tmptext1), "Argent: %i€\nBanque: %i€\nArgent sale: %i€\n\nMétier: %s\nEmployeur: %s\nSalaire: %i€\n\n", money[client], bank[client], dirtyMoney[client], JobNameUser[client], RankNameUser[client], GetClientSalary(client));
+			Format(tmptext1, sizeof(tmptext1), "Argent: %i€\nBanque: %i€\nArgent sale: %i€\n\nMétier: %s\nEmployeur: %s\nSalaire: %i€\n", money[client], bank[client], dirtyMoney[client], JobNameUser[client], RankNameUser[client], GetClientSalary(client));
 			
-			if (IsChefPolice(client) || IsChef(client) || IsCoChef(client))
+			if (taxesAmount > 0) {
+				Format(tmptext1, sizeof(tmptext1), "%sImpôts: %i\n\n", tmptext1, taxesAmount);
+			} else {
+				Format(tmptext1, sizeof(tmptext1), "%s\n", tmptext1);
+			}
+
+			if (IsChefPolice(client) || IsChef(client) || IsCoChef(client) || IsMaire(client))
 			{
 				Format(tmptext2, sizeof(tmptext2), "Capital: %i€\n", capital[jobid[client]]);
 			}
@@ -3354,6 +3394,19 @@ public Action:HudTimer(Handle:timer, any:client)
 					StopSound(client, SNDCHAN_STATIC, "UI/hint.wav");
 				}
 			}
+
+			if (ExplodeString(Name, "-", Buffer, 3, 32) > 2) {
+				if (StrEqual(Buffer[2], "imprim"))
+				{
+					if (IsBricoleur(client) || IsInformaticien(client)) {
+						PrintHintText(client, "Propriétaire: %N\nPapier : %i", printer_owner[entity], printer_paper[entity]);
+					} else {
+						PrintHintText(client, "Papier : %i", printer_paper[entity]);
+					}
+					
+					StopSound(client, SNDCHAN_STATIC, "UI/hint.wav");
+				}
+			}
 		}
 
 		new aim = GetClientAimTarget(client, true);
@@ -3388,26 +3441,28 @@ public Action:HudTimer(Handle:timer, any:client)
 	return Plugin_Continue;
 }
 
-public Action:ImprimanteTimer(Handle:timer, any:client)
+public Action:ImprimanteTimer(Handle:timer, any:printer)
 {
-	if(!IsValid(client))
+	if(!IsValid(printer_owner[printer]))
 	{
-		CloseHandle(TimerImprimante[client]);
+		CloseHandle(printer_timer[printer]);
 		return Plugin_Stop;
 	}
-	else
-	{
-		if (HasImprimante[client] > 0)
-		{
-			if (HasRib(client))
+	if (GetPrinterPaper(printer) > 0) {
+		GetPrinterZoneName(printer, ZonePrinter[printer], sizeof(ZonePrinter[]));
+		if (IsPrinterInBanque(printer)) {
+			if (HasRib(printer_owner[printer]))
 			{
-				bank[client] += (MONEY_BY_IMPRIMANTE * HasImprimante[client]);
+				bank[printer_owner[printer]] += MONEY_BY_IMPRIMANTE;
 			}
 			else
 			{
-				money[client] += (MONEY_BY_IMPRIMANTE * HasImprimante[client]);
+				money[printer_owner[printer]] += MONEY_BY_IMPRIMANTE;
 			}
+		} else {
+			ClientDirtyMoneyTransaction(printer_owner[printer], MONEY_BY_IMPRIMANTE);
 		}
+		SetPrinterPaper(printer, GetPrinterPaper(printer) - MONEY_BY_IMPRIMANTE);
 	}
 	
 	return Plugin_Continue;
@@ -4030,6 +4085,78 @@ ModifySpeed(client, Float:speed)
 	{
 		SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", speed);
 	}
+}
+
+public Action:Command_ChangePrinterOwner(client, args) {
+	if (IsValidAndAlive(client))
+	{
+		if (IsBricoleur(client) || IsInformaticien(client))
+		{
+			LoopPlayersForPrinters(client);
+		}
+		else
+		{
+			CPrintToChat(client, "%s : Vous n'avez pas accès à cette commande.", g_bPrefix);
+		}
+	}
+	
+	return Plugin_Handled;
+}
+
+LoopPlayersForPrinters(client) {
+	if(client > 0 && client <= MaxClients && !IsFakeClient(client))
+	{
+		decl String:sMenuText[64];
+		sMenuText[0] = '\0';
+		
+		new Handle:menu = CreateMenu(MenuHandler_LoopPlayersPrinters);
+		SetMenuTitle(menu, "Choisis le joueur :");
+		SetMenuExitButton(menu, true);
+		
+		Addplayers(menu);
+		
+		DisplayMenu(menu, client, MENU_TIME_FOREVER);
+	}
+}
+
+public MenuHandler_LoopPlayersPrinters(Handle:menu, MenuAction:action, client, param2)
+{
+	if (action == MenuAction_Select)
+	{
+		new Ent;
+		new String:Name[200];
+		Ent = GetClientAimTarget(client, false);
+			
+		if (Ent != -1 && IsValidEntity(Ent))
+		{
+			decl String:Buffer[8][32];
+			Entity_GetName(Ent, Name, sizeof(Name));
+							
+			ExplodeString(Name, "-", Buffer, 3, 150);
+							
+			if (StrEqual(Buffer[2], "imprim"))
+			{
+				new String:info[64];
+		
+				GetMenuItem(menu, param2, info, sizeof(info));
+				
+				new UserID = StringToInt(info);
+				CPrintToChat(client, "%s : Vous avez changé le propriétaire de l'{olive}imprimante{unique} pour %N.", g_bPrefix, UserID);
+				CPrintToChat(UserID, "%s : Vous êtes le nouveau propriétaire d'une {olive}imprimante{unique}.", g_bPrefix);
+				printer_owner[Ent] = UserID;
+			} else {
+				CPrintToChat(client, "%s : Vous devez viser une {red}imprimante{unique}.", g_bPrefix);
+			}
+		} else {
+			CPrintToChat(client, "%s : Vous devez viser une {red}imprimante{unique}.", g_bPrefix);
+		}
+	}
+	else if (action == MenuAction_End)
+	{
+		CloseHandle(menu);
+	}
+
+	return 1;
 }
 
 public Action:Command_Jobmenu(client, args)
@@ -5111,6 +5238,18 @@ public GetZoneName(client, String:ZoneName[], maxlen)
 	{
 		strcopy(ZoneName, maxlen, "Extérieur");
 	}
+}
+
+public GetPrinterZoneName(printer, String:ZoneName[], maxlen)
+{
+	decl String:tempName[150];
+	decl String:parentNode[150];
+	strcopy(tempName, maxlen, "Extérieur");
+		
+	new Float:v[3];
+	GetEntPropVector(printer, Prop_Send, "m_vecOrigin", v);
+	GetClientZone(g_kvZones, v, tempName, maxlen, parentNode);
+	strcopy(ZoneName, maxlen, tempName);
 }
 
 Ralentissement(client, Float:speed, Float:duration)
@@ -7911,6 +8050,35 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 					RemoveFromInventory(client, itemID, itemUsed, 1);
 				}		
 			}
+			case 25:
+			{
+				if (HasImprimante[client] < LIMIT_IMPRIMANTE)
+				{
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					SpawnImprimante(client);
+					HasImprimante[client] += 1;
+						
+					if (IsInBanque(client)) {
+						CPrintToChat(client, "%s : Vous avez spawn une {olive}imprimante à billets{unique} [%i/%d].", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
+					} else {
+						CPrintToChat(client, "%s : Vous avez spawn une {red}imprimante à faux-billets{unique} [%i/%d].", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
+					}
+					
+				}
+				else
+				{
+					CPrintToChat(client, "%s : Vous avez déjà {red}trop{unique} d'imprimantes à faux-billet de posées [%i/%d]", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
+				}
+			}
+			case 26:
+			{
+				if (PutPaperInPrinter(client)) {
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					CPrintToChat(client, "%s : Vous avez recharger le {olive}papier{unique} de l'{olive}imprimante{unique} !", g_bPrefix);
+				} else {
+					CPrintToChat(client, "%s : Il faut mettre le papier dans une {olive}imprimante{unique} !", g_bPrefix);
+				}
+			}
 			case 6:
 			{
 				if (ReloadWeaponAmmos(client)) {
@@ -7920,6 +8088,28 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 			}
 		}
 	}
+}
+
+public PutPaperInPrinter (client) {
+	new Ent;
+	new String:Name[200];
+	Ent = GetClientAimTarget(client, false);
+		
+	if (Ent != -1 && IsValidEntity(Ent))
+	{
+		decl String:Buffer[8][32];
+		Entity_GetName(Ent, Name, sizeof(Name));
+						
+		ExplodeString(Name, "-", Buffer, 3, 150);
+						
+		if (StrEqual(Buffer[2], "imprim"))
+		{
+			ReloadPrinterPaper(Ent);
+			return true;
+		}
+	}
+
+	return false;
 }
 
 public ApplyCardSkimmer (client) {
@@ -8454,6 +8644,56 @@ public IsClientInJail (client) {
 public setClientInJail (client, isInJail) {
 	IsInJail[client] = isInJail;
 }
+
+public Action:Command_Taxes(client, args) {
+	if (IsValidAndAlive(client)) {
+		if (IsMaire(client)) {
+			BuildTaxesMenu(client);
+		}
+	}
+}
+
+Handle:BuildTaxesMenu(client)
+{
+	decl String:Buffer[128];
+	new i = 0;
+	new Handle:menu = CreateMenu(Menu_Taxes);
+	
+	SetMenuTitle(menu, "Choisis le montant de l'impôt :");
+	AddMenuItem(menu, "0", "0%");
+	AddMenuItem(menu, "10", "10%");
+	AddMenuItem(menu, "20", "20%");
+	AddMenuItem(menu, "30", "30%");
+	AddMenuItem(menu, "40", "40%");
+	AddMenuItem(menu, "50", "50%");
+	AddMenuItem(menu, "60", "60%");
+	AddMenuItem(menu, "70", "70%");
+	AddMenuItem(menu, "80", "80%");
+	AddMenuItem(menu, "90", "90%");
+	
+	DisplayMenu(menu, client, 60);
+	return menu;
+}
+
+public Menu_Taxes(Handle:menu, MenuAction:action, client, param2)
+{
+	if (action == MenuAction_Select)
+	{
+		decl String:info[64];
+		
+		GetMenuItem(menu, param2, info, sizeof(info));
+		CPrintToChatAll("%s : Le Maire {olive}%N{unique} vient de faire passer l'impôt sur le revenu de {red}%i%%{unique} à {red}%i%%{unique}.", g_bPrefix, client, taxesAmount, StringToInt(info));
+		taxesAmount = StringToInt(info);
+	}
+	else
+	{
+		if (action == MenuAction_End)
+		{
+			CloseHandle(menu);
+		}
+	}
+}
+
 
 public Action:Command_Autosell(client, args) {
 	if (IsValidAndAlive(client)) {
@@ -10774,52 +11014,6 @@ public Menu_Jugement(Handle:Jugement, MenuAction:action, param1, param2)
 	}
 }
 
-public Action:Command_Build(client, Args)
-{
-	if (IsValidAndAlive(client))
-	{
-		if (0 > 0)
-		{
-			if (!HasAmeliorationElectronique[client])
-			{
-				if (HasImprimante[client] < LIMIT_IMPRIMANTE)
-				{
-					SpawnImprimante(client);
-					HasImprimante[client] += 1;
-					
-					CPrintToChat(client, "%s : Vous avez spawn une imprimante à faux-billets [%i/%d].", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
-					
-				}
-				else
-				{
-					CPrintToChat(client, "%s : Vous avez déjà trop d'imprimantes à faux-billet de posées [%i/%d]", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
-				}
-			}
-			else
-			{
-				if (HasImprimante[client] < LIMIT_IMPRIMANTE_WITH_AMELIORATION)
-				{
-					SpawnImprimante(client);
-					HasImprimante[client] += 1;
-					
-					CPrintToChat(client, "%s : Vous avez spawn une imprimante à faux-billets [%i/%d].", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE_WITH_AMELIORATION);
-					
-				}
-				else
-				{
-					CPrintToChat(client, "%s : Vous avez déjà trop d'imprimantes à faux-billet de posées [%i/%d]", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE_WITH_AMELIORATION);
-				}
-			}
-		}
-		else
-		{
-			CPrintToChat(client, "%s : Vous n'avez pas d'imprimantes à faux-billets.", g_bPrefix);
-		}
-	}
-	
-	return Plugin_Handled;
-}
-
 public SpawnImprimante(client)
 {
 	if (IsValidAndAlive(client))
@@ -10880,6 +11074,8 @@ public SpawnImprimante(client)
 		TeleportEntity(prop, position, NULL_VECTOR, NULL_VECTOR);
 		
 		printer_owner[prop] = client;
+		printer_timer[prop] = CreateTimer(10.0, ImprimanteTimer, prop, TIMER_REPEAT);
+		ReloadPrinterPaper(prop);
 		
 		HookSingleEntityOutput(prop, "OnBreak", OnPropPhysBreak);
 	}
@@ -10902,6 +11098,7 @@ public OnPropPhysBreak(const String:output[], caller, activator, Float:delay)
 	}
 	
 	printer_owner[caller] = 0;
+	KillTimer(printer_timer[caller]);
 }
 
 public bool:TraceEntityFilterPlayers( entity, contentsMask, any:data )
@@ -11148,6 +11345,7 @@ public RemoveImprimante(client, const String:SteamId[])
 						if (StrEqual(Buffer[0], SteamId))
 						{
 							RemoveEdict(i);
+							KillTimer(printer_timer[i]);
 						}
 					}
 				}
@@ -12030,7 +12228,6 @@ public Action:Timer_MayorVote(Handle:timer, any:client)
 
 public Action:Timer_ChooseMayor(Handle:timer, any:client)
 {	
-	PrintToServer("Choose Mayor timer");
 	new mayorWithMostVotes = 0;
 	new secondMostVotes = 0;
 	for (new i = 1; i <= MaxClients; i++) {
@@ -12051,16 +12248,14 @@ public Action:Timer_ChooseMayor(Handle:timer, any:client)
 		}
 	}
 
-	PrintToServer("%N : %i & %N : %i", mayorWithMostVotes, mayorCount[mayorWithMostVotes], secondMostVotes, mayorCount[secondMostVotes]);
-
 	if (mayorCount[mayorWithMostVotes] > mayorCount[secondMostVotes]) {
 		IsInFakeJob[mayorWithMostVotes] = true;
 		beforeCouvertureJobId[mayorWithMostVotes] = GetClientJobID(mayorWithMostVotes);
 		beforeCouvertureRankId[mayorWithMostVotes] = GetClientRankID(mayorWithMostVotes);
-		SetClientJobID(mayorWithMostVotes, 12);
-		SetClientRankID(mayorWithMostVotes, 1);
+		SetClientJobID(mayorWithMostVotes, 2);
+		SetClientRankID(mayorWithMostVotes, 10);
 		CS_SwitchTeam(mayorWithMostVotes, 3);
-		ChooseSkin(12);
+		ChooseSkin(mayorWithMostVotes);
 		InitSalary(mayorWithMostVotes);
 
 		mayorAlive = true;
@@ -12113,8 +12308,6 @@ public Menu_VotedMayor(Handle:Vote, MenuAction:action, client, param2)
 	GetMenuItem(Vote, param2, mayorId, sizeof(mayorId));
 	if (IsValid(StringToInt(mayorId)) && IsValid(client)) {
 		votedForMayor[client] = StringToInt(mayorId);
-		PrintToServer("Mayor ID as string : %s", mayorId);
-		PrintToServer("Mayor ID : %i", StringToInt(mayorId));
 		CPrintToChat(client, "%s : Votre vote pour l'éléction de {olive}Maire{unique} revient à {olive}%N{unique} !", g_bPrefix, votedForMayor[client]);
 	}
 }
@@ -12488,6 +12681,15 @@ IsInCoach(client)
 IsInBricoleur(client)
 {
 	if (StrEqual(ZoneUser[client], "Les Bricoleurs", false)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+IsPrinterInBanque(printer)
+{
+	if (StrEqual(ZonePrinter[printer], "La Banque", false)) {
 		return true;
 	} else {
 		return false;
