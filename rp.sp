@@ -47,7 +47,7 @@
 #define LIMIT_IMPRIMANTE	5
 #define LIMIT_IMPRIMANTE_WITH_AMELIORATION	8
 #define LIMIT_PLANTE	3
-#define MONEY_BY_IMPRIMANTE	50
+#define MONEY_BY_IMPRIMANTE	25
 #define TIME_LOCATION	259200
 #define DAYS_LOCATION	3
 #define EF_NODRAW 32
@@ -58,6 +58,7 @@
 #define SKIN_MAFIA	"models/player/vad36_professional/2020/t_phoenix.mdl"
 #define SKIN_WILDLINGS	"models/player/wildlings/phoenix/t_phoenix.mdl"
 #define SKIN_CYBERCRIMINAL	"models/player/vad36anarchist/t_phoenix.mdl"
+#define SKIN_RIPOU	"models/player/vad36go_fbi/ct_urban.mdl"
 #define SKIN_JAIL	"models/player/blackbirds/jailpublic/t_leet.mdl"
 #define SKIN_FISHER	"models/player/elis/fsv2/fischer.mdl"
 #define SKIN_NIKO	"models/player/slow/niko_bellic/slow.mdl"
@@ -615,6 +616,32 @@ public OnMapStart()
 	AddFileToDownloadsTable("models/player/wildlings/phoenix/t_phoenix.sw.vtx");
 	AddFileToDownloadsTable("models/player/wildlings/phoenix/t_phoenix.vvd");
 
+	//
+
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_glass.vmt");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_glass.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_head_exponent_varianta.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_head_normal_varianta.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_head_varianta.vmt");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_head_varianta.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_lowerbody.vmt");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_lowerbody.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_lowerbody_exponent.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_lowerbody_normal.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_upperbody.vmt");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_upperbody.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_upperbody_exponent.vtf");
+	AddFileToDownloadsTable("materials/models/player/vad36go_fbi/ct_fbi_upperbody_normal.vtf");
+
+	AddFileToDownloadsTable("models/player/vad36go_fbi/ct_urban.dx80.vtx");
+	AddFileToDownloadsTable("models/player/vad36go_fbi/ct_urban.dx90.vtx");
+	AddFileToDownloadsTable("models/player/vad36go_fbi/ct_urban.mdl");
+	AddFileToDownloadsTable("models/player/vad36go_fbi/ct_urban.phy");
+	AddFileToDownloadsTable("models/player/vad36go_fbi/ct_urban.sw.vtx");
+	AddFileToDownloadsTable("models/player/vad36go_fbi/ct_urban.vvd");
+
+	//
+
 	AddFileToDownloadsTable("materials/models/player/blackbirds/jailpublic/t_leet.vtf");
 	AddFileToDownloadsTable("materials/models/player/blackbirds/jailpublic/t_leet.vmt");
 	AddFileToDownloadsTable("materials/models/player/blackbirds/jailpublic/t_leet_glass.vmt");
@@ -638,6 +665,7 @@ public OnMapStart()
 	PrecacheModel(SKIN_MAFIA, true);
 	PrecacheModel(SKIN_WILDLINGS, true);
 	PrecacheModel(SKIN_CYBERCRIMINAL, true);
+	PrecacheModel(SKIN_RIPOU, true);
 	PrecacheModel(SKIN_JAIL, true);
 	PrecacheModel(SKIN_FISHER, true);
 	PrecacheModel(SKIN_NIKO, true);
@@ -1125,214 +1153,222 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 		new Ent;
 		new String:Name[200];
 		new String:Classname[32];
-		
-		Ent = GetClientAimTarget(client, false);
-		
-		if (Ent != -1 && IsValidEntity(Ent))
+
+		Ent = GetClientAimTarget(client, true);
+			
+		if (Ent != -1)
 		{
-			Entity_GetName(Ent, Name, sizeof(Name));
-		
-			new Float:origin[3], Float:clientent[3];
-			
-			GetEntPropVector(Ent, Prop_Send, "m_vecOrigin", origin);
-			GetEntPropVector(client, Prop_Send, "m_vecOrigin", clientent);
-			
-			new Float:distance = GetVectorDistance(origin, clientent);
-			new Float:vec[3];
-			
-			GetClientAbsOrigin(client, vec);
-			vec[2] += 10;
-			
-			GetEdictClassname(Ent, Classname, sizeof(Classname));
-			
-			decl String:modelname[128];
-			GetEntPropString(Ent, Prop_Data, "m_ModelName", modelname, sizeof(modelname));
-
-			decl String:Buffer[8][32];
-			decl String:itemType[32];
-			if (ExplodeString(Name, "_", Buffer, 3, 32) > 2) {
-				itemType = Buffer[0];
-				if (StrEqual(itemType, "item")) {
-					new itemID = StringToInt(Buffer[1]);
-					new quantity = 1;
-					SaveInventory(client, itemID, Buffer[2], quantity);
-					CPrintToChat(client, "%s : Vous avez ramassé {red}%i{unique} {olive}%s{unique}.", g_bPrefix, quantity, Buffer[2]);
-					RemoveEdict(Ent);
-				}
+			if (IsPolice(Ent)) {
+				BuildPoliceBribesMenu(client, Ent);
 			}
-						
-			if (StrEqual(modelname, "models/props/cs_assault/money.mdl"))
+		} else {
+			Ent = GetClientAimTarget(client, false);
+			if (Ent != -1 && IsValidEntity(Ent))
 			{
-				new Float:Entvec[3];
-				new Float:Plyrvec[3];
-				new Float:distvec = 0.0;
+				Entity_GetName(Ent, Name, sizeof(Name));
+			
+				new Float:origin[3], Float:clientent[3];
 				
-				GetClientAbsOrigin(client, Plyrvec);
-				GetEntPropVector(Ent, Prop_Send, "m_vecOrigin", Entvec);
+				GetEntPropVector(Ent, Prop_Send, "m_vecOrigin", origin);
+				GetEntPropVector(client, Prop_Send, "m_vecOrigin", clientent);
 				
-				distvec = GetVectorDistance(Entvec, Plyrvec, false);
+				new Float:distance = GetVectorDistance(origin, clientent);
+				new Float:vec[3];
 				
-				if (distvec < 60)
-				{
-					decl String:FinalMoney[32];
-					
-					GetTargetName(Ent, FinalMoney, sizeof(FinalMoney));
-					
-					if (0 < StringToInt(FinalMoney))
-					{
+				GetClientAbsOrigin(client, vec);
+				vec[2] += 10;
+				
+				GetEdictClassname(Ent, Classname, sizeof(Classname));
+				
+				decl String:modelname[128];
+				GetEntPropString(Ent, Prop_Data, "m_ModelName", modelname, sizeof(modelname));
+
+				decl String:Buffer[8][32];
+				decl String:itemType[32];
+				if (ExplodeString(Name, "_", Buffer, 3, 32) > 2) {
+					itemType = Buffer[0];
+					if (StrEqual(itemType, "item")) {
+						new itemID = StringToInt(Buffer[1]);
+						new quantity = 1;
+						SaveInventory(client, itemID, Buffer[2], quantity);
+						CPrintToChat(client, "%s : Vous avez ramassé {red}%i{unique} {olive}%s{unique}.", g_bPrefix, quantity, Buffer[2]);
 						RemoveEdict(Ent);
-						
-						money[client] += StringToInt(FinalMoney);
-						
-						CPrintToChat(client, "%s : Vous avez ramasser %s€ par terre.", g_bPrefix, FinalMoney);
 					}
 				}
-			}
-			decl String:Door[255];
-			GetEdictClassname(Ent, Door, sizeof(Door));
-			if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
-			{
-				new HammerID = Entity_GetHammerId(Ent);
-				decl String:hammerIdBuffer[40];
-				IntToString(HammerID, hammerIdBuffer, sizeof(hammerIdBuffer));
-				new doorKeyCode = GetDoorKeyCode(hammerIdBuffer);
-				PrintToServer("KeyCode : %i", doorKeyCode);
-				if (doorKeyCode != -1 && doorKeyCode != -2) {
-					BuildKeypadTypeMenu(client, hammerIdBuffer, doorKeyCode);
-				}
-
-			}
-			PrintToServer("Distrib Name : %s", Name);
-			if (StrEqual(Name, "distributeur") || StrContains(Name, "hacked_distributeur_") != -1)
-			{
-				if (distance <= 60)
+							
+				if (StrEqual(modelname, "models/props/cs_assault/money.mdl"))
 				{
-					Entiter[client] = Ent;
-					new Handle:menu = CreateMenu(Menu_Bank);
-					SetMenuTitle(menu, "Banque :");
+					new Float:Entvec[3];
+					new Float:Plyrvec[3];
+					new Float:distvec = 0.0;
 					
-					if (HasCompteCourant(client))
+					GetClientAbsOrigin(client, Plyrvec);
+					GetEntPropVector(Ent, Prop_Send, "m_vecOrigin", Entvec);
+					
+					distvec = GetVectorDistance(Entvec, Plyrvec, false);
+					
+					if (distvec < 60)
 					{
-						AddMenuItem(menu, "Deposit", "Déposer de l'argent");
-						AddMenuItem(menu, "Retired", "Retirer de l'argent");
+						decl String:FinalMoney[32];
 						
-						if (IsChef(client))
-						{
-							AddMenuItem(menu, "Capital", "Déposer dans le capital");
-						}
-						if (IsBanquier(client)) {
-							AddMenuItem(menu, "verifyATM", "Vérifier l'état du distributeur");
-						}
+						GetTargetName(Ent, FinalMoney, sizeof(FinalMoney));
 						
-						AddMenuItem(menu, "save", "Forcer la sauvegarde");
-						DisplayMenu(menu, client, 30);
-					}
-					else
-					{
-						CPrintToChat(client, "%s : J'ai besoin d'un {olive}compte bancaire{unique} pour pouvoir utiliser ce {olive}distributeur{unique}.", g_bPrefix);
-					}
-				}
-				else
-				{
-					CPrintToChat(client, "%s : Vous êtes trop loin du distributeur.", g_bPrefix);
-				}
-			}
-			else if (StrEqual(Name, "caisse_kit"))
-			{
-				if (distance <= 60)
-				{
-					if ((IsMafia(client) && IsInMafia(client)) || (IsWildlings(client) && IsInWildlings(client)))
+						if (0 < StringToInt(FinalMoney))
 						{
-							if (!OnCreationKit[client])
-							{
-								if (GetItemInInventory(17, client) < LIMIT_KIT)
-								{
-									CreateTimer(6.0, Timer_Kit, client);
-									
-									SetEntPropFloat(client, Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
-									SetEntProp(client, Prop_Send, "m_iProgressBarDuration", 6);
-									
-									OnCreationKit[client] = true;
-									
-									SetEntityRenderColor(client, 255, 0, 0, 0);
-									SetEntityMoveType(client, MOVETYPE_NONE);
-								}
-								else
-								{
-									CPrintToChat(client, "%s : Vous avez le maximum de kit de crochetage (%i/%d)", g_bPrefix, 0, LIMIT_KIT);
-								}
-							}
-							else
-							{
-								CPrintToChat(client, "%s : Vous êtes déjà en cours de fabrication.", g_bPrefix);
-							}
+							RemoveEdict(Ent);
+							
+							money[client] += StringToInt(FinalMoney);
+							
+							CPrintToChat(client, "%s : Vous avez ramasser %s€ par terre.", g_bPrefix, FinalMoney);
 						}
-					else
-					{
-						CPrintToChat(client, "%s : Vous ne pouvez pas utiliser cette caisse.", g_bPrefix);
 					}
 				}
-				else
+				decl String:Door[255];
+				GetEdictClassname(Ent, Door, sizeof(Door));
+				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
 				{
-					CPrintToChat(client, "%s : Vous êtes trop loin de la caisse.", g_bPrefix);
+					new HammerID = Entity_GetHammerId(Ent);
+					decl String:hammerIdBuffer[40];
+					IntToString(HammerID, hammerIdBuffer, sizeof(hammerIdBuffer));
+					new doorKeyCode = GetDoorKeyCode(hammerIdBuffer);
+					PrintToServer("KeyCode : %i", doorKeyCode);
+					if (doorKeyCode != -1 && doorKeyCode != -2) {
+						BuildKeypadTypeMenu(client, hammerIdBuffer, doorKeyCode);
+					}
+
 				}
-			}
-			else if (StrEqual(Name, "caisse_comico") || StrEqual(Name, "caisse_fbi"))
-			{
-				new timestamp;
-				timestamp = GetTime();
-				
-				if ((timestamp - PickupWeapon[client]) < 15)
-				{
-					CPrintToChat(client, "%s : Vous devez attendre %i secondes avant de pouvoir prendre une arme.", g_bPrefix, (15 - (timestamp - PickupWeapon[client])) );
-				}
-				else
+				PrintToServer("Distrib Name : %s", Name);
+				if (StrEqual(Name, "distributeur") || StrContains(Name, "hacked_distributeur_") != -1)
 				{
 					if (distance <= 60)
 					{
-						new Handle:menuarmu = CreateMenu(Menu_ArmuFlic);
-						SetMenuTitle(menuarmu, "Armurerie du gouvernement :");
+						Entiter[client] = Ent;
+						new Handle:menu = CreateMenu(Menu_Bank);
+						SetMenuTitle(menu, "Banque :");
 						
-						if (StrEqual(Name, "caisse_comico"))
+						if (HasCompteCourant(client))
 						{
-							if (IsGardien(client))
+							AddMenuItem(menu, "Deposit", "Déposer de l'argent");
+							AddMenuItem(menu, "Retired", "Retirer de l'argent");
+							
+							if (IsChef(client))
 							{
-								AddMenuItem(menuarmu, "usp", "KM .45 Tactique");
-								AddMenuItem(menuarmu, "m3", "Fusil à pompe Benelli M3");
+								AddMenuItem(menu, "Capital", "Déposer dans le capital");
 							}
-							else
-							{
-								AddMenuItem(menuarmu, "usp", "KM .45 Tactique");
-								AddMenuItem(menuarmu, "m3", "Fusil à pompe Benelli M3");
-								AddMenuItem(menuarmu, "mp5", "MP5 Navy");
-								AddMenuItem(menuarmu, "famas", "Clarion 5.56 Famas");
+							if (IsBanquier(client)) {
+								AddMenuItem(menu, "verifyATM", "Vérifier l'état du distributeur");
 							}
+							
+							AddMenuItem(menu, "save", "Forcer la sauvegarde");
+							DisplayMenu(menu, client, 30);
 						}
-						else if (StrEqual(Name, "caisse_fbi"))
+						else
 						{
-							if (IsFbi(client) || IsCia(client) || IsGti(client) || IsChefPolice(client))
-							{
-								AddMenuItem(menuarmu, "", "--- PROTECTIONS ---", ITEMDRAW_DISABLED);
-								AddMenuItem(menuarmu, "kevlar", "Kevlar + Casque");
-								AddMenuItem(menuarmu, "", "--- SOINS ---", ITEMDRAW_DISABLED);
-								AddMenuItem(menuarmu, "soin", "Trousse de soins");
-								AddMenuItem(menuarmu, "", "--- ARMES ---", ITEMDRAW_DISABLED);
-								AddMenuItem(menuarmu, "scout", "Schmidt Scout");
-								AddMenuItem(menuarmu, "m4", "Maverick M4A1");
-								AddMenuItem(menuarmu, "five", "FN Five Seven");
-								AddMenuItem(menuarmu, "deagle", "NightHawk Desert Eagle");
-							}
-							else
-							{
-								CPrintToChat(client, "%s : Vous n'avez pas le grade nécessaire.", g_bPrefix);
-							}
+							CPrintToChat(client, "%s : J'ai besoin d'un {olive}compte bancaire{unique} pour pouvoir utiliser ce {olive}distributeur{unique}.", g_bPrefix);
 						}
-						
-						DisplayMenu(menuarmu, client, 30);
 					}
 					else
 					{
-						CPrintToChat(client, "%s : Vous êtes trop éloigné de la caisse.", g_bPrefix);
+						CPrintToChat(client, "%s : Vous êtes trop loin du distributeur.", g_bPrefix);
+					}
+				}
+				else if (StrEqual(Name, "caisse_kit"))
+				{
+					if (distance <= 60)
+					{
+						if ((IsMafia(client) && IsInMafia(client)) || (IsWildlings(client) && IsInWildlings(client)))
+							{
+								if (!OnCreationKit[client])
+								{
+									if (GetItemInInventory(17, client) < LIMIT_KIT)
+									{
+										CreateTimer(6.0, Timer_Kit, client);
+										
+										SetEntPropFloat(client, Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
+										SetEntProp(client, Prop_Send, "m_iProgressBarDuration", 6);
+										
+										OnCreationKit[client] = true;
+										
+										SetEntityRenderColor(client, 255, 0, 0, 0);
+										SetEntityMoveType(client, MOVETYPE_NONE);
+									}
+									else
+									{
+										CPrintToChat(client, "%s : Vous avez le maximum de kit de crochetage (%i/%d)", g_bPrefix, 0, LIMIT_KIT);
+									}
+								}
+								else
+								{
+									CPrintToChat(client, "%s : Vous êtes déjà en cours de fabrication.", g_bPrefix);
+								}
+							}
+						else
+						{
+							CPrintToChat(client, "%s : Vous ne pouvez pas utiliser cette caisse.", g_bPrefix);
+						}
+					}
+					else
+					{
+						CPrintToChat(client, "%s : Vous êtes trop loin de la caisse.", g_bPrefix);
+					}
+				}
+				else if (StrEqual(Name, "caisse_comico") || StrEqual(Name, "caisse_fbi"))
+				{
+					new timestamp;
+					timestamp = GetTime();
+					
+					if ((timestamp - PickupWeapon[client]) < 15)
+					{
+						CPrintToChat(client, "%s : Vous devez attendre %i secondes avant de pouvoir prendre une arme.", g_bPrefix, (15 - (timestamp - PickupWeapon[client])) );
+					}
+					else
+					{
+						if (distance <= 60)
+						{
+							new Handle:menuarmu = CreateMenu(Menu_ArmuFlic);
+							SetMenuTitle(menuarmu, "Armurerie du gouvernement :");
+							
+							if (StrEqual(Name, "caisse_comico"))
+							{
+								if (IsGardien(client))
+								{
+									AddMenuItem(menuarmu, "usp", "KM .45 Tactique");
+									AddMenuItem(menuarmu, "m3", "Fusil à pompe Benelli M3");
+								}
+								else
+								{
+									AddMenuItem(menuarmu, "usp", "KM .45 Tactique");
+									AddMenuItem(menuarmu, "m3", "Fusil à pompe Benelli M3");
+									AddMenuItem(menuarmu, "mp5", "MP5 Navy");
+									AddMenuItem(menuarmu, "famas", "Clarion 5.56 Famas");
+								}
+							}
+							else if (StrEqual(Name, "caisse_fbi"))
+							{
+								if (IsFbi(client) || IsCia(client) || IsGti(client) || IsChefPolice(client))
+								{
+									AddMenuItem(menuarmu, "", "--- PROTECTIONS ---", ITEMDRAW_DISABLED);
+									AddMenuItem(menuarmu, "kevlar", "Kevlar + Casque");
+									AddMenuItem(menuarmu, "", "--- SOINS ---", ITEMDRAW_DISABLED);
+									AddMenuItem(menuarmu, "soin", "Trousse de soins");
+									AddMenuItem(menuarmu, "", "--- ARMES ---", ITEMDRAW_DISABLED);
+									AddMenuItem(menuarmu, "scout", "Schmidt Scout");
+									AddMenuItem(menuarmu, "m4", "Maverick M4A1");
+									AddMenuItem(menuarmu, "five", "FN Five Seven");
+									AddMenuItem(menuarmu, "deagle", "NightHawk Desert Eagle");
+								}
+								else
+								{
+									CPrintToChat(client, "%s : Vous n'avez pas le grade nécessaire.", g_bPrefix);
+								}
+							}
+							
+							DisplayMenu(menuarmu, client, 30);
+						}
+						else
+						{
+							CPrintToChat(client, "%s : Vous êtes trop éloigné de la caisse.", g_bPrefix);
+						}
 					}
 				}
 			}
@@ -1360,6 +1396,118 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 	}	
 	
 }
+
+Handle:BuildPoliceBribesMenu(client, police)
+{
+	decl String:Buffer[128];
+	new i = 0;
+	new Handle:menu = CreateMenu(Menu_Bribes);
+	
+	SetMenuTitle(menu, "Choisis le montant du pot de vin :");
+	Format(Buffer, sizeof(Buffer), "%i_%i", police, 100);
+	AddMenuItem(menu, Buffer, "100€");
+	Format(Buffer, sizeof(Buffer), "%i_%i", police, 200);
+	AddMenuItem(menu, Buffer, "200€");
+	Format(Buffer, sizeof(Buffer), "%i_%i", police, 300);
+	AddMenuItem(menu, Buffer, "300€");
+	Format(Buffer, sizeof(Buffer), "%i_%i", police, 400);
+	AddMenuItem(menu, Buffer, "400€");
+	Format(Buffer, sizeof(Buffer), "%i_%i", police, 500);
+	AddMenuItem(menu, Buffer, "500€");
+	
+	DisplayMenu(menu, client, 60);
+	return menu;
+}
+
+public Menu_Bribes(Handle:menu, MenuAction:action, client, param2)
+{
+	if (action == MenuAction_Select)
+	{
+		decl String:info[64];
+		decl String:Buffer[8][32];
+
+		GetMenuItem(menu, param2, info, sizeof(info));
+		
+		ExplodeString(info, "_", Buffer, 2, 32);
+		
+		new SellPlayerID = 0;
+		new Price = 0;
+		Price = StringToInt(Buffer[1]);
+		SellPlayerID = StringToInt(Buffer[0]);
+		
+		new Handle:bribe_menuAcceptOrRefuse = CreateMenu(Menu_BribesAcceptOrRefuse);
+		
+		if (SellPlayerID != client)
+		{
+			SetMenuTitle(bribe_menuAcceptOrRefuse, "%N vous propose un pot-de-vin d'un montant de : %i€", client, Price);
+		}
+
+		decl String:Choix[32];
+		
+		Format(Choix, sizeof(Choix), "%i_%i_a", client, Price);
+		AddMenuItem(bribe_menuAcceptOrRefuse, Choix, "Accepter l'offre");
+		
+		Format(Choix, sizeof(Choix), "%i_%i_r", client, Price);
+		AddMenuItem(bribe_menuAcceptOrRefuse, Choix, "Décliner l'offre");
+		
+		DisplayMenu(bribe_menuAcceptOrRefuse, SellPlayerID, 30);
+		
+		GetMenuItem(menu, param2, info, sizeof(info));
+		PrintToServer("%s", info);
+	}
+	else
+	{
+		if (action == MenuAction_End)
+		{
+			CloseHandle(menu);
+		}
+	}
+}
+
+public Menu_BribesAcceptOrRefuse(Handle:bribe_menuAcceptOrRefuse, MenuAction:action, client, param2)
+{
+	if (action == MenuAction_Select)
+	{
+		decl String:info[64];
+		
+		new Vendeur;
+		new id;
+		decl String:ItemID[64];
+		new PriceFinal;
+		
+		GetMenuItem(bribe_menuAcceptOrRefuse, param2, info, sizeof(info));
+		
+		decl String:Buffer[20][64];
+		ExplodeString(info, "_", Buffer, 3, 64);
+		
+		Vendeur = StringToInt(Buffer[0]);
+		PriceFinal = StringToInt(Buffer[1]);
+		
+		if (StrEqual(Buffer[2], "a"))
+		{
+			if (MakeTransaction(Vendeur, Vendeur, -PriceFinal, 0, 0)) {
+				MakeTransaction(client, client, PriceFinal, 0, 0);
+				CPrintToChat(Vendeur, "%s : Vous avez {olive}donné un pot-de-vin{unique} de {olive}%i€{unique} à %N.", g_bPrefix, PriceFinal, client);
+				CPrintToChat(client, "%s : Vous avez {olive}reçu un pot-de-vin{unique} de {olive}%i€{unique} de la part de %N.", g_bPrefix, PriceFinal, Vendeur);
+				new newReputation = GetClientReputation(client) - GetRandomInt(1, 8);
+				SetClientReputation(client, newReputation);
+			} else {
+				CPrintToChat(Vendeur, "%s : Vous {red}n'avez pas l'argent nécessaire{unique} pour donner un tel {red}pot-de-vin{unique} !", g_bPrefix, client);
+				CPrintToChat(client, "%s : %N {red}ne peut pas vous verser de pot-de-vin{unique} car il n'en a pas les moyens.", g_bPrefix, Vendeur);
+			}
+		}
+		else
+		{
+			CPrintToChat(Vendeur, "%s : %N a {red}refusé{unique} votre offre.", g_bPrefix, client);
+			CPrintToChat(client, "%s : Vous avez {red}refusé{unique} l'offre de %N.", g_bPrefix, Vendeur);
+		}
+	}
+	else if (action == MenuAction_End)
+	{
+		CloseHandle(bribe_menuAcceptOrRefuse);
+	}
+}
+
 
 public Action:OnPlayerDeath(Handle:event, const String:name[], bool:dontBroadcast)
 {
@@ -2378,6 +2526,8 @@ public GiveSalary()
 				CPrintToChat(i, "%s : Vous n'avez pas reçu votre paye car vous êtes en prison.", g_bPrefix);
 			}
 		}
+		new newReputation = GetClientReputation(i) + GetRandomInt(1, 5);
+		SetClientReputation(i, newReputation);
 	}
 }
 
@@ -2411,6 +2561,9 @@ public GetClientReputation (client) {
 public SetClientReputation (client, newReputation) {
 	if (newReputation < 0) {
 		newReputation = 0;
+	}
+	if (newReputation > 100) {
+		newReputation = 100;
 	}
 	reputation[client] = newReputation;
 }
@@ -2599,6 +2752,10 @@ public IsInformaticien(client)
 
 public IsCyberCriminal(client) {
 	return ClientHasJob(10, client) && (GetClientReputation(client) < 50);
+}
+
+public IsCorruptedPolice(client) {
+	return ClientHasJob(2, client) && (GetClientReputation(client) < 55);
 }
 
 public IsWildlings(client)
@@ -3459,10 +3616,11 @@ public Action:ImprimanteTimer(Handle:timer, any:printer)
 			{
 				money[printer_owner[printer]] += MONEY_BY_IMPRIMANTE;
 			}
+			SetPrinterPaper(printer, GetPrinterPaper(printer) - 1);
 		} else {
 			ClientDirtyMoneyTransaction(printer_owner[printer], MONEY_BY_IMPRIMANTE);
+			SetPrinterPaper(printer, GetPrinterPaper(printer) - 2);
 		}
-		SetPrinterPaper(printer, GetPrinterPaper(printer) - MONEY_BY_IMPRIMANTE);
 	}
 	
 	return Plugin_Continue;
@@ -4063,6 +4221,8 @@ GetClanTagName(client, jid, rid, String:TagName[], maxlen)
 		Format(TagName, maxlen, "Absent -");
 	} else if (IsCyberCriminal(client)) {
 		Format(TagName, maxlen, "Cybercriminel -");
+	} else if (IsCorruptedPolice(client)) {
+		Format(TagName, maxlen, "Ripou -");
 	} else {
 		GetRankNameKV(g_kvJobs, jid, rid, TagName, maxlen);
 		StrCat(TagName, maxlen, " -");
@@ -4113,7 +4273,7 @@ LoopPlayersForPrinters(client) {
 		SetMenuTitle(menu, "Choisis le joueur :");
 		SetMenuExitButton(menu, true);
 		
-		Addplayers(menu);
+		AddplayersPrinters(menu);
 		
 		DisplayMenu(menu, client, MENU_TIME_FOREVER);
 	}
@@ -4143,7 +4303,10 @@ public MenuHandler_LoopPlayersPrinters(Handle:menu, MenuAction:action, client, p
 				new UserID = StringToInt(info);
 				CPrintToChat(client, "%s : Vous avez changé le propriétaire de l'{olive}imprimante{unique} pour %N.", g_bPrefix, UserID);
 				CPrintToChat(UserID, "%s : Vous êtes le nouveau propriétaire d'une {olive}imprimante{unique}.", g_bPrefix);
+				HasImprimante[printer_owner[Ent]] -= 1;
 				printer_owner[Ent] = UserID;
+				HasImprimante[printer_owner[Ent]] += 1;
+
 			} else {
 				CPrintToChat(client, "%s : Vous devez viser une {red}imprimante{unique}.", g_bPrefix);
 			}
@@ -4190,6 +4353,27 @@ LoopPlayers(client)
 		Addplayers(menu);
 		
 		DisplayMenu(menu, client, MENU_TIME_FOREVER);
+	}
+}
+
+public AddplayersPrinters(Handle:menu)
+{
+	decl String:user_id[12];
+	decl String:name[MAX_NAME_LENGTH];
+	decl String:display[MAX_NAME_LENGTH+15];
+	
+	for (new i = 1; i <= MaxClients; i++)
+	{
+		if(IsValid(i))
+		{
+			IntToString(i, user_id, sizeof(user_id));
+			
+			GetClientName(i, name, sizeof(name));
+			
+			Format(display, sizeof(display), "%s", name);
+			
+			AddMenuItem(menu, user_id, display);
+		}
 	}
 }
 
@@ -5757,6 +5941,8 @@ public Action:Say(client, String:command[], args)
 	
 			if (IsCyberCriminal(client)) {
 				Format(JobName, sizeof(JobName), "Cybercriminel");
+			} else if (IsCorruptedPolice(client)) {
+				Format(JobName, sizeof(JobName), "Ripou");
 			} else {
 				GetRankName(rankid[client], jobid[client], JobName, sizeof(JobName));
 			}
@@ -8055,7 +8241,27 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 				if (HasImprimante[client] < LIMIT_IMPRIMANTE)
 				{
 					RemoveFromInventory(client, itemID, itemUsed, 1);
-					SpawnImprimante(client);
+					SpawnImprimante(client, true);
+					HasImprimante[client] += 1;
+						
+					if (IsInBanque(client)) {
+						CPrintToChat(client, "%s : Vous avez spawn une {olive}imprimante à billets{unique} [%i/%d].", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
+					} else {
+						CPrintToChat(client, "%s : Vous avez spawn une {red}imprimante à faux-billets{unique} [%i/%d].", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
+					}
+					
+				}
+				else
+				{
+					CPrintToChat(client, "%s : Vous avez déjà {red}trop{unique} d'imprimantes à faux-billet de posées [%i/%d]", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
+				}
+			}
+			case 27:
+			{
+				if (HasImprimante[client] < LIMIT_IMPRIMANTE)
+				{
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					SpawnImprimante(client, false);
 					HasImprimante[client] += 1;
 						
 					if (IsInBanque(client)) {
@@ -11014,7 +11220,7 @@ public Menu_Jugement(Handle:Jugement, MenuAction:action, param1, param2)
 	}
 }
 
-public SpawnImprimante(client)
+public SpawnImprimante(client, fromBank)
 {
 	if (IsValidAndAlive(client))
 	{
@@ -11074,8 +11280,14 @@ public SpawnImprimante(client)
 		TeleportEntity(prop, position, NULL_VECTOR, NULL_VECTOR);
 		
 		printer_owner[prop] = client;
-		printer_timer[prop] = CreateTimer(10.0, ImprimanteTimer, prop, TIMER_REPEAT);
+		printer_timer[prop] = CreateTimer(20.0, ImprimanteTimer, prop, TIMER_REPEAT);
 		ReloadPrinterPaper(prop);
+
+		if (fromBank) {
+			SetEntityRenderColor(prop, 0, 255, 0, 255);
+		} else {
+			SetEntityRenderColor(prop, 0, 0, 255, 255);
+		}
 		
 		HookSingleEntityOutput(prop, "OnBreak", OnPropPhysBreak);
 	}
@@ -11142,7 +11354,11 @@ public ChooseSkin(client)
 	if (IsValidAndAlive(client))
 	{
 		if (IsPolice(client)) {
-			SetEntityModel(client, SKIN_POLICE_DEFAULT);
+			if (IsCorruptedPolice(client)) {
+				SetEntityModel(client, SKIN_RIPOU);
+			} else {
+				SetEntityModel(client, SKIN_POLICE_DEFAULT);
+			}
 		} else {
 			if (IsClientInJail(client)) {
 				SetEntityModel(client, SKIN_JAIL);
