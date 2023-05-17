@@ -260,6 +260,8 @@ new secAmmoTypeOffset = -1;
 new priAmmoTypeOffset = -1;
 new taxesAmount = 0;
 new CountVirer = 0;
+new spawnSize = 0;
+new spawnJailSize = 0;
 new printer_owner[2048];
 new printer_timer[2048] = { INVALID_HANDLE, ...};
 new printer_paper[2048];
@@ -316,6 +318,7 @@ public OnPluginStart()
 	HookEvent("player_connect", event_PlayerConnect, EventHookMode_Pre);
 	HookEvent("player_team", OnPlayerTeam, EventHookMode_Pre);
 	HookEvent("player_disconnect", event_PlayerDisconnect_Suppress, EventHookMode_Pre);
+	HookEvent("player_spawn", PlayerSpawn);
 	
 	HookEvent("weapon_fire", EventWeaponFire, EventHookMode_Pre);
 	
@@ -696,6 +699,7 @@ public OnMapStart()
 	ReloadDoorsKV();
 	ReloadItemsKV();
 	ReloadActivitiesKV();
+	LoadSpawnSize();
 	g_kvZones = new KeyValues("MapZones");
 	g_kvZones.ImportFromFile("addons/sourcemod/configs/roleplay/maps.txt");
 
@@ -894,22 +898,6 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		return Plugin_Changed;
 	}
 	
-	if (damagetype & DMG_VEHICLE)
-	{
-		if (StrEqual("prop_vehicle_driveable", sInflictor, false))
-		{
-			damage = 0.0;
-			
-			new Driver = GetEntPropEnt(inflictor, Prop_Send, "m_hPlayer");
-			
-			if (Driver != -1)
-			{
-				attacker = Driver;
-				return Plugin_Changed;
-			}
-		}
-	}
-	
 	if (IsInCellules(Player) || IsInMoniteur(Player) || IsInHopital(Player) || IsTazed[Player])
 	{
 		damage = 0.0;
@@ -931,15 +919,6 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 		{
 			damage = 0.0;
 				
-			return Plugin_Changed;
-		}
-		
-		new InVehicule = GetEntPropEnt(victim, Prop_Send, "m_hVehicle");
-	
-		if (InVehicule != -1)
-		{
-			damage = 0.0;
-			
 			return Plugin_Changed;
 		}
 		
@@ -966,7 +945,7 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 					
 						Client_ScreenFade(victim, 500, FFADE_OUT|FFADE_PURGE, 1, 250, 250, 250, 200, true);
 						
-						Ralentissement(victim, 0.7, 5.0);
+						Ralentissement(victim, 0.8, 2.0);
 					
 						damage = 0.0;
 					
@@ -993,7 +972,7 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 					
 					Client_ScreenFade(victim, 500, FFADE_OUT|FFADE_PURGE, 1, 250, 250, 250, 200, true);
 					
-					Ralentissement(victim, 0.7, 5.0);
+					Ralentissement(victim, 0.8, 2.0);
 					
 					damage = 0.0;
 					
@@ -1002,72 +981,30 @@ public Action:OnTakeDamage(victim, &attacker, &inflictor, &Float:damage, &damage
 			}
 			else if (StrEqual(sWeapon, "weapon_knife"))
 			{
-				CutJail(Player, victim);
-				
-				damage = 0.0;
-			
-				return Plugin_Changed;
-			}
-		}
-	
-		if (Player == inflictor)
-		{
-			if (StrEqual(sWeapon, "weapon_knife"))
-			{
-				if (CUTBURN_ACTIVE[Player])
-				{
-					BurnPlayer(victim);
-					
+				if (IsTazed[victim]) {
+					CutJail(Player, victim);
 					damage = 0.0;
 					return Plugin_Changed;
 				}
-				
-				if (CUTFREEZE_ACTIVE[Player])
-				{
-					FreezePlayer(victim);
-					
-					damage = 0.0;
-					return Plugin_Changed;
-				}
-				
-				if (CUTFLASH_ACTIVE[Player])
-				{
-					FlashPlayer(victim);
-					
-					damage = 0.0;
-					return Plugin_Changed;
-				}
-				
-				if (CUTSMALL_ACTIVE[Player])
-				{
-					SmallPlayer(victim, 10.0);
-					
-					damage = 0.0;
-					return Plugin_Changed;
-				}
-				
-				if (CUTBIG_ACTIVE[Player])
-				{
-					BigPlayer(victim, 10.0);
-					
-					damage = 0.0;
-					return Plugin_Changed;
-				}
-				
 			}
 		}
 		
-		if (GetClientTeam(Player) == 3 && GetClientTeam(victim) == 2 || GetClientTeam(Player) == 2 && GetClientTeam(victim) == 3)
-		{
+		if (GetClientTeam(Player) != GetClientTeam(victim)) {
 			if (!StrEqual(sWeapon, "weapon_knife"))
 			{
-				damage *= 0.8;
-				return Plugin_Changed;
+				damage *= 0.7;
+			} else {
+				damage = 5.0;
 			}
+			return Plugin_Changed;
 		}
-		else if (GetClientTeam(Player) == 3 && GetClientTeam(victim) == 3 || GetClientTeam(Player) == 2 && GetClientTeam(victim) == 2)
-		{
-			damage *= 1.2;
+		else {
+			if (!StrEqual(sWeapon, "weapon_knife"))
+			{
+				damage *= 1.2;
+			} else {
+				damage = 5.0;
+			}
 			return Plugin_Changed;
 		}
 	}
@@ -1196,7 +1133,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 					}
 				}
 							
-				if (StrEqual(modelname, "models/props/cs_assault/money.mdl"))
+				/*if (StrEqual(modelname, "models/props/cs_assault/money.mdl"))
 				{
 					new Float:Entvec[3];
 					new Float:Plyrvec[3];
@@ -1222,7 +1159,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 							CPrintToChat(client, "%s : Vous avez ramasser %s€ par terre.", g_bPrefix, FinalMoney);
 						}
 					}
-				}
+				}*/
 				decl String:Door[255];
 				GetEdictClassname(Ent, Door, sizeof(Door));
 				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
@@ -1542,52 +1479,6 @@ public Action:OnPlayerDeath(Handle:event, const String:name[], bool:dontBroadcas
 				CarHorn[client] = false;
 				g_Count[client] = 0.0;
 				ClientCommand(client, "r_screenoverlay debug/yuv.vmt");
-				
-				if (money[client] > 0)
-				{
-					new random = (money[client] / 100) * 10;
-					
-					new FinalMoney = 0;
-					
-					if (0 <= money[client] - random)
-					{
-						CPrintToChat(client, "%s : %i€ sont tombées de vos poches en mourant.", g_bPrefix, random);
-						
-						FinalMoney = random;
-					}
-					else
-					{
-						CPrintToChat(client, "%s : %i€ sont tombées de vos poches en mourant.", g_bPrefix, money[client]);
-						
-						FinalMoney = money[client];
-						
-						money[client] = 0;
-					}
-					
-					new ent;
-					
-					if((ent = CreateEntityByName("prop_physics")) != -1)
-					{
-						new Float:origin[3];
-						GetClientEyePosition(client, origin);
-						
-						TeleportEntity(ent, origin, NULL_VECTOR, NULL_VECTOR);
-						
-						decl String:TargetName[32];
-						Format(TargetName, sizeof(TargetName), "%i", FinalMoney);
-						
-						DispatchKeyValue(ent, "model", MODELS_MONEY);
-						DispatchKeyValue(ent, "physicsmode", "2");
-						DispatchKeyValue(ent, "massScale", "8.0");
-						DispatchKeyValue(ent, "targetname", TargetName);
-						DispatchSpawn(ent);
-						
-						SetEntityMoveType(ent, MOVETYPE_VPHYSICS);
-						
-						SetEntProp(ent, Prop_Send, "m_usSolidFlags", 8);
-						SetEntProp(ent, Prop_Send, "m_CollisionGroup", 11);
-					}
-				}
 			}
 			
 			if (killer > 0)
@@ -1657,6 +1548,18 @@ public Action:OnPlayerDeath(Handle:event, const String:name[], bool:dontBroadcas
 			}
 		}
 	}
+}
+
+public PlayerSpawn(Handle:event, const String:Name[], bool:Broadcast)
+{
+	new client = GetClientOfUserId(GetEventInt(event, "userid"));
+	if (jailtime[client] > 0)
+	{
+		JailSpawnClient(client);
+	} else {
+		SpawnClient(client);
+	}
+	
 }
 
 public Action:InitCapital(Handle:timer)
@@ -3239,9 +3142,7 @@ public Action:Timer_Dead(Handle:timer, any:client)
 				}
 				else
 				{
-					
-					SpawnClient(client);
-					
+										
 					if (IsInChirurgieJambes[client])
 					{
 						SetChirurgie(client, 1);
@@ -3364,12 +3265,13 @@ public initJailSpawns () {
 	CloseHandle(database);
 }
 
-public SpawnClient (client) {
+public LoadSpawnSize () {
+	spawnSize = 0;
+	spawnJailSize = 0;
 	KeyValues kv = new KeyValues("Spawns");
 	kv.ImportFromFile("addons/sourcemod/configs/roleplay/spawns.txt");
 
 	new i = 0;
-	decl String:IdentifierName[20];
 	if (!kv.GotoFirstSubKey())
 	{
 		return 0;
@@ -3380,43 +3282,51 @@ public SpawnClient (client) {
 	}
 
 	kv.Rewind();
-	new value = GetRandomInt(0, i-1);
+	delete kv;
+
+	KeyValues kvJail = new KeyValues("JailSpawns");
+	kvJail.ImportFromFile("addons/sourcemod/configs/roleplay/jailSpawns.txt");
+	new iJail = 0;
+	if (!kvJail.GotoFirstSubKey())
+	{
+		return 0;
+	}
+
+	while (kvJail.GotoNextKey()) {
+		iJail++;
+	}
+
+	kvJail.Rewind();
+	delete kvJail;
+
+	spawnSize = i;
+	spawnJailSize = iJail;
+}
+
+public SpawnClient (client) {
+	decl String:IdentifierName[20];
+	new value = GetRandomInt(0, spawnSize);
 	IntToString(value, IdentifierName, sizeof(IdentifierName));
-	if (kv.JumpToKey(IdentifierName)) {
+	if (g_kvSpawns.JumpToKey(IdentifierName)) {
 		new Float:pos[3];
-		kv.GetVector("spawn_pos", pos);
+		g_kvSpawns.GetVector("spawn_pos", pos);
 		TeleportEntity(client, pos, NULL_VECTOR, NULL_VECTOR);
 	}
-	kv.Rewind();
-	delete kv;
+	g_kvSpawns.Rewind();
 
 	return 1;
 }
 
 public JailSpawnClient (client) {
-	KeyValues kv = new KeyValues("JailSpawns");
-	kv.ImportFromFile("addons/sourcemod/configs/roleplay/jailSpawns.txt");
-	new i = 0;
 	decl String:IdentifierName[20];
-	if (!kv.GotoFirstSubKey())
-	{
-		return 0;
-	}
-
-	while (kv.GotoNextKey()) {
-		i++;
-	}
-
-	kv.Rewind();
-	new value = GetRandomInt(0, i-1);
+	new value = GetRandomInt(0, spawnJailSize);
 	IntToString(value, IdentifierName, sizeof(IdentifierName));
-	if (kv.JumpToKey(IdentifierName)) {
+	if (g_kvJailSpawns.JumpToKey(IdentifierName)) {
 		new Float:pos[3];
-		kv.GetVector("spawn_pos", pos);
+		g_kvJailSpawns.GetVector("spawn_pos", pos);
 		TeleportEntity(client, pos, NULL_VECTOR, NULL_VECTOR);
 	}
-	kv.Rewind();
-	delete kv;
+	g_kvJailSpawns.Rewind();
 
 	return 1;
 }
@@ -5001,10 +4911,8 @@ public Action:Command_Tazer(client, args)
 							new Float:entorigin[3], Float:clientent[3];
 							GetEntPropVector(i, Prop_Send, "m_vecOrigin", entorigin);
 							GetEntPropVector(client, Prop_Send, "m_vecOrigin", clientent);
-							
-							new Float:distance = GetVectorDistance(entorigin, clientent);
 						
-							if (distance <= 1000.0)
+							if (IsInRange(client, i))
 							{
 								IsTazed[i] = true;
 								
@@ -8256,6 +8164,15 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 					CPrintToChat(client, "%s : Vous avez déjà {red}trop{unique} d'imprimantes à faux-billet de posées [%i/%d]", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
 				}
 			}
+			case 26:
+			{
+				if (PutPaperInPrinter(client)) {
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					CPrintToChat(client, "%s : Vous avez recharger le {olive}papier{unique} de l'{olive}imprimante{unique} !", g_bPrefix);
+				} else {
+					CPrintToChat(client, "%s : Il faut mettre le papier dans une {olive}imprimante{unique} !", g_bPrefix);
+				}
+			}
 			case 27:
 			{
 				if (HasImprimante[client] < LIMIT_IMPRIMANTE)
@@ -8276,14 +8193,29 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 					CPrintToChat(client, "%s : Vous avez déjà {red}trop{unique} d'imprimantes à faux-billet de posées [%i/%d]", g_bPrefix, HasImprimante[client], LIMIT_IMPRIMANTE);
 				}
 			}
-			case 26:
+			case 28:
 			{
-				if (PutPaperInPrinter(client)) {
-					RemoveFromInventory(client, itemID, itemUsed, 1);
-					CPrintToChat(client, "%s : Vous avez recharger le {olive}papier{unique} de l'{olive}imprimante{unique} !", g_bPrefix);
-				} else {
-					CPrintToChat(client, "%s : Il faut mettre le papier dans une {olive}imprimante{unique} !", g_bPrefix);
-				}
+				RemoveFromInventory(client, itemID, itemUsed, 1);
+				HasDiplome[client] = true;
+				CPrintToChat(client, "%s : Vous avez utilisé un {olive}%s{unique} !", g_bPrefix, itemUsed);
+			}
+			case 29:
+			{
+				RemoveFromInventory(client, itemID, itemUsed, 1);
+				UseHealthKit(client, 7);
+				CPrintToChat(client, "%s : Vous avez utilisé un {olive}%s{unique} !", g_bPrefix, itemUsed);
+			}
+			case 30:
+			{
+				RemoveFromInventory(client, itemID, itemUsed, 1);
+				UseHealthKit(client, 5);
+				CPrintToChat(client, "%s : Vous avez utilisé un {olive}%s{unique} !", g_bPrefix, itemUsed);
+			}
+			case 31:
+			{
+				RemoveFromInventory(client, itemID, itemUsed, 1);
+				UseHealthKit(client, 2);
+				CPrintToChat(client, "%s : Vous avez utilisé un {olive}%s{unique} !", g_bPrefix, itemUsed);
 			}
 			case 6:
 			{
@@ -8295,6 +8227,68 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 		}
 	}
 }
+
+public UseHealthKit (client, kitTimer) {
+	if (!crochetageon[client]) {
+		Entiter[client] = GetClientAimTarget(client, true);
+				
+		if (Entiter[client] != -1) {
+			if (IsInRange(client, Entiter[client])) {
+				crochetageon[client] = true;
+				SetEntPropFloat(client, Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
+				SetEntProp(client, Prop_Send, "m_iProgressBarDuration", float(kitTimer));
+				g_croche[client] = CreateTimer(float(kitTimer), Timer_HealthKit, client, TIMER_REPEAT);
+				SetEntityRenderColor(client, 0, 255, 128, 0);
+				SetEntityMoveType(client, MOVETYPE_NONE);
+
+				SetEntPropFloat(Entiter[client], Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
+				SetEntProp(Entiter[client], Prop_Send, "m_iProgressBarDuration", float(kitTimer));
+				SetEntityRenderColor(Entiter[client], 0, 255, 128, 0);
+				SetEntityMoveType(Entiter[client], MOVETYPE_NONE);
+
+				CPrintToChat(client, "%s : Vous utilisez votre {olive}kit de soins{unique} sur {olive}%N{unique}.", g_bPrefix, Entiter[client]);
+				CPrintToChat(Entiter[client], "%s : {olive}%N{unique} utilise un {olive}kit de soins{unique} sur vous.", g_bPrefix, client);
+			} else {
+				CPrintToChat(Entiter[client], "%s : Vous êtes trop {red}loin{unique} !", g_bPrefix, client);
+			}
+		} else {
+			crochetageon[client] = true;
+			SetEntPropFloat(client, Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
+			SetEntProp(client, Prop_Send, "m_iProgressBarDuration", float(kitTimer));
+			g_croche[client] = CreateTimer(float(kitTimer), Timer_HealthKit, client, TIMER_REPEAT);
+			SetEntityRenderColor(client, 0, 255, 128, 0);
+			SetEntityMoveType(client, MOVETYPE_NONE);
+		}
+	}
+}
+
+public Action:Timer_HealthKit(Handle:timer, any:client)
+{
+	if (IsValidAndAlive(client))
+	{
+		if (Entiter[client] != -1) {
+			SetEntityHealth(Entiter[client], 200);
+			SetEntityMoveType(Entiter[client], MOVETYPE_WALK);
+			SetEntityRenderColor(Entiter[client], 255, 255, 255, 255);
+			crochetageon[Entiter[client]] = false;
+			SetEntPropFloat(Entiter[client], Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
+			SetEntProp(Entiter[client], Prop_Send, "m_iProgressBarDuration", 0);
+		} else {
+			SetEntityHealth(client, 200);
+		}	
+		SetEntityMoveType(client, MOVETYPE_WALK);
+		SetEntityRenderColor(client, 255, 255, 255, 255);
+	
+		crochetageon[client] = false;
+		
+		SetEntPropFloat(client, Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
+		SetEntProp(client, Prop_Send, "m_iProgressBarDuration", 0);
+		
+		KillTimer(g_croche[client]);
+		Entiter[client] = -1;
+	}
+}
+
 
 public PutPaperInPrinter (client) {
 	new Ent;
@@ -9152,7 +9146,11 @@ public Action:Command_Sellactivities(client, args)
 			
 			if (BuyerIndex != -1)
 			{
-				BuildSellActivityMenu(client, BuyerIndex);
+				if (IsInRange(client, BuyerIndex)) {
+					BuildSellActivityMenu(client, BuyerIndex);
+				} else {
+					CPrintToChat(client, "%s : Vous êtes trop {red}loin{unique} !", g_bPrefix);
+				}
 			}
 			else
 			{
@@ -9223,7 +9221,7 @@ public Menu_SellActivity(Handle:menu, MenuAction:action, client, param2)
 {
 	if (action == MenuAction_Select)
 	{
-		decl String:info[64];
+		decl String:info[264];
 		
 		new SellPlayerID = 0;
 		new Price = 0;
@@ -9241,8 +9239,8 @@ public Menu_SellActivity(Handle:menu, MenuAction:action, client, param2)
 		Price = StringToInt(Buffer[2]);
 		
 		
-		decl String:Choix[32];
-		decl String:TEXT[32];
+		decl String:Choix[264];
+		decl String:TEXT[264];
 		
 		new Handle:sell_menuPlayer = CreateMenu(Menu_SellActivityPlayer);
 		
@@ -9275,7 +9273,7 @@ public Menu_SellActivityPlayer(Handle:sell_menuPlayer, MenuAction:action, client
 {
 	if (action == MenuAction_Select)
 	{
-		decl String:info[64];
+		decl String:info[264];
 		
 		new Vendeur;
 		new id;
@@ -9283,7 +9281,6 @@ public Menu_SellActivityPlayer(Handle:sell_menuPlayer, MenuAction:action, client
 		new PriceFinal;
 		
 		GetMenuItem(sell_menuPlayer, param2, info, sizeof(info));
-		
 		decl String:Buffer[20][64];
 		ExplodeString(info, "_", Buffer, 5, 64);
 		
@@ -9401,7 +9398,11 @@ public Action:Command_Sell(client, args)
 			
 			if (BuyerIndex != -1)
 			{
-				BuildSellMenu(client, BuyerIndex);
+				if (IsInRange(client, BuyerIndex)) {
+					BuildSellMenu(client, BuyerIndex);
+				} else {
+					CPrintToChat(client, "%s : Vous êtes trop {red}loin{unique} !", g_bPrefix);
+				}
 			}
 			else
 			{
@@ -12246,20 +12247,27 @@ public Action:Command_Buy(client, args)
 
 		Ent = GetClientAimTarget(client, false);
 		if (Ent != -1) {
-			GetEdictClassname(Ent, Door, sizeof(Door));
+			if (IsInRange(client, Ent)) {
+				GetEdictClassname(Ent, Door, sizeof(Door));
 				
-			if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
-			{
-				new HammerID = Entity_GetHammerId(Ent);
-				decl String:buffer[400];
-				new String:SteamId[64];
-				GetClientAuthId(client, AuthId_Steam2, SteamId, sizeof(SteamId));
-				
-				Format(buffer, sizeof(buffer),"INSERT INTO doors(hammer_id, steam_id, map) VALUES ('%i', '%s', '%s')", HammerID, SteamId, current_map);
-				SQL_TQuery(g_ThreadedHandle, CallbackBuyDoor, buffer, client);
-
+				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+				{
+					if (MakeTransaction(client, client, -500, 0, 0)) {
+						new HammerID = Entity_GetHammerId(Ent);
+						decl String:buffer[400];
+						new String:SteamId[64];
+						GetClientAuthId(client, AuthId_Steam2, SteamId, sizeof(SteamId));
+						
+						Format(buffer, sizeof(buffer),"INSERT INTO doors(hammer_id, steam_id, map) VALUES ('%i', '%s', '%s')", HammerID, SteamId, current_map);
+						SQL_TQuery(g_ThreadedHandle, CallbackBuyDoor, buffer, client);
+					} else {
+						CPrintToChat(client, "%s : Vous avez besoin de {olive}500€{unique} pour acheter cette porte !", g_bPrefix);
+					}
+				} else {
+					CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{unique} ça !", g_bPrefix);
+				}
 			} else {
-				CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{unique} ça !", g_bPrefix);
+				CPrintToChat(client, "%s : Vous êtes trop {red}loin{unique} pour faire ça !", g_bPrefix);
 			}
 		} else {
 			CPrintToChat(client, "%s : Vous {red}devez{unique} être face à une porte !", g_bPrefix);
@@ -12544,7 +12552,7 @@ public CallbackBuyDoor(Handle:owner, Handle:hndl, const String:error[], any:clie
 		CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{unique} cette porte.", g_bPrefix);
 	} else {
 		ReloadDoorsKV();
-		CPrintToChat(client, "%s : Vous {olive}possédez{unique} les clés de cette porte.", g_bPrefix);
+		CPrintToChat(client, "%s : Vous avez {olive}acheté{unique} les clés de cette porte pour {olive}500€{unique}.", g_bPrefix);
 	}
 }
 
