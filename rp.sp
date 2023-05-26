@@ -32,7 +32,7 @@
 #define AFK_TIME	300.0
 #define AFK_TIME_LEGENDARY	500.0
 #define PRICE_GROUP	1000
-#define RESPAWN_TIME	3
+#define RESPAWN_TIME	15
 #define RESPAWN_TIME_LEGENDARY	15
 #define EMBAUCHE_EXPIRE	0
 #define EMBAUCHE_DAY	3
@@ -75,26 +75,11 @@
 #define TIME_WEED	60.0
 #define TIME_CHAMPIGNONS	60.0
 #define TIME_METH	90.0
-
-#define PRICE_ECSTAZY	500
-#define PRICE_COCAINE	400
-#define PRICE_HEROINE	300
-#define PRICE_SHIT	200
-#define PRICE_WEED	100
-#define PRICE_CHAMPIGNONS	80
+#define TIME_FENTANYL	180.0
 
 #define PRICE_CONTRATFLIC		1000
 #define PRICE_CONTRATCIVIL	600
 
-#define PRICE_IMPRIMANTE	150
-#define PRICE_AMELIORATION	400
-#define PRICE_OEIL	600
-#define PRICE_REGENERATION	800
-
-#define PRICE_HAMBURGER	350
-#define PRICE_HAMBURGERFAT	600
-#define PRICE_BIGMAC	900
-#define PRICE_HAPPYMEAL	1500
 
 #define g_bPrefix "{orangered}[Roleplay]{unique}"
 #define g_bPrefixEvent "{blue}[{red}★ RP-Event ★{blue}]{green}"
@@ -102,10 +87,10 @@
 #define g_bPrefixVip "{blue}[{red}★ VIP ★{blue}]{green}"
 #define g_bPrefixPub "{olive}[Publicité]{normal}"
 #define g_bPub1 "Bienvenue en ville !"
-#define g_bPub2 "Notre Teamspeak : "
+#define g_bPub2 "N'hésitez pas à signaler les bugs sur le channel {olive}#bug-report{normal} du Discord."
 #define g_bPub3 "Notre Discord : https://discord.gg/SqTrzbKTnu"
 #define g_bPub4 "Fondateur du serveur : {orangered}Aeziak{default}"
-#define g_bPub5 "Pour devenir Admin veuillez voir les Fondateurs"
+#define g_bPub5 "Nous {red}ne recrutons pas{normal} d'admins pour le moment."
 
 new Handle:TimerHud[MAXPLAYERS+1] = { INVALID_HANDLE, ...};
 new Handle:TimerImprimante[MAXPLAYERS+1] = { INVALID_HANDLE, ...};
@@ -115,6 +100,7 @@ new Handle:g_croche[MAXPLAYERS+1] = { INVALID_HANDLE, ...};
 new Handle:g_TazerTimer[MAXPLAYERS+1] = { INVALID_HANDLE, ...};
 new Handle:g_braquage[MAXPLAYERS+1] = { INVALID_HANDLE, ... };
 new Handle:g_ThreadedHandle = null;
+new Handle:g_grab[MAXPLAYERS+1] = { INVALID_HANDLE, ... };
 new Handle:FreezeTimer[MAXPLAYERS+1];
 new Handle:Timers;
 new Handle:gTimer;
@@ -236,6 +222,7 @@ new HasPlante[MAXPLAYERS+1] = 0;
 new braquagetime[MAXPLAYERS+1] = 0;
 new votedForMayor[MAXPLAYERS+1] = 0;
 new mayorCount[MAXPLAYERS+1] = 0;
+new lastDrugTimer[MAXPLAYERS+1] = 0;
 
 
 new g_areaShootCount = 0;
@@ -365,9 +352,6 @@ public OnPluginStart()
 	RegConsoleCmd("sm_demission", Command_Demission);
 	RegConsoleCmd("sm_vol", Command_Vol);
 	RegConsoleCmd("sm_pickpocket", Command_Pickpocket);
-	RegConsoleCmd("sm_crocheter", Command_Crocheter);
-	RegConsoleCmd("sm_crochetage", Command_Crocheter);
-	RegConsoleCmd("sm_lockpick", Command_Crocheter);
 	RegConsoleCmd("sm_piratage", Command_Piratage);
 	RegConsoleCmd("sm_pick", Command_Pick);
 	RegConsoleCmd("sm_item", Command_Item);
@@ -400,6 +384,7 @@ public OnPluginStart()
 	RegConsoleCmd("sm_buygroup", Command_Buygroup);
 	RegConsoleCmd("sm_camera", Command_Camera);
 	RegConsoleCmd("sm_mayor", Command_Mayor);
+	RegConsoleCmd("sm_maire", Command_Mayor);
 	RegConsoleCmd("sm_impots", Command_Taxes);
 	RegConsoleCmd("sm_impot", Command_Taxes);
 	RegConsoleCmd("sm_taxes", Command_Taxes);
@@ -737,7 +722,7 @@ public OnMapEnd()
 public Action:OnRoundStart(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	decl String:GameName[64];
-	Format(GameName, sizeof(GameName), "RolePlay - alpha");
+	Format(GameName, sizeof(GameName), "☼ RolePlay ☼");
 	Steam_SetGameDescription(GameName);
 	
 	if (StrEqual(current_map, "rp_riverside_b4"))
@@ -1048,6 +1033,86 @@ public OnPreThink(client)
 	GetClientEyeAngles(client, CurrentEyeAngle[client]);
 }
 
+BuildPoleEmploiMenu(client)
+{
+	decl String:user_id[12];
+	decl String:text[256];
+	decl String:display[256];
+
+	new Handle:menu = CreateMenu(MenuHandler_SelectJob);
+	SetMenuTitle(menu, "Choisis ton métier :");
+	SetMenuExitButton(menu, true);
+			
+	Format(text, sizeof(text), "%i_3_4", client);
+	Format(display, sizeof(display), "Apprenti Dealer");
+	AddMenuItem(menu, text, display);
+
+	Format(text, sizeof(text), "%i_4_4", client);
+	Format(display, sizeof(display), "Apprenti Banquier");
+	AddMenuItem(menu, text, display);
+
+	Format(text, sizeof(text), "%i_5_4", client);
+	Format(display, sizeof(display), "Apprenti Bricoleur");
+	AddMenuItem(menu, text, display);
+
+	Format(text, sizeof(text), "%i_7_4", client);
+	Format(display, sizeof(display), "Apprenti Armurier");
+	AddMenuItem(menu, text, display);
+
+	Format(text, sizeof(text), "%i_9_5", client);
+	Format(display, sizeof(display), "Infirmier");
+	AddMenuItem(menu, text, display);
+
+	Format(text, sizeof(text), "%i_10_3", client);
+	Format(display, sizeof(display), "Informaticien");
+	AddMenuItem(menu, text, display);
+		
+	DisplayMenu(menu, client, 30);
+}
+
+public MenuHandler_SelectJob(Handle:menu, MenuAction:action, client, param2)
+{
+	if (action == MenuAction_Select)
+	{
+
+		new String:info[32];
+		GetMenuItem(menu, param2, info, sizeof(info));
+		decl String:Buffer[8][32];
+		
+		ExplodeString(info, "_", Buffer, 3, 32);
+		new client = StringToInt(Buffer[0]);
+		PrintToServer("Selected option : %s : %s", Buffer[0], Buffer[1]);
+		jobid[client] = StringToInt(Buffer[1]);
+		rankid[client] = StringToInt(Buffer[2]);
+				
+		CS_SwitchTeam(client, CS_TEAM_T);
+		
+		ChooseSkin(client);
+		
+		decl String:ClanTagRankName[20];
+		GetClanTagName(client, rankid[client], jobid[client], ClanTagRankName, sizeof(ClanTagRankName));
+
+		CS_SetClientClanTag(client, ClanTagRankName);
+		
+		GetRankName(rankid[client], jobid[client], JobNameUser[client], sizeof(JobNameUser[]));
+		
+		CPrintToChat(client, "%s : Vous avez été promu {olive}%s{unique}.", g_bPrefix, JobNameUser[client]);
+		
+		InitSalary(client);
+		
+		employers[jobid[client]] += 1;
+		
+		SauvegardeCapital(jobid[client]);
+		
+		DBSave(jobs[client]);
+	}
+	else if (action == MenuAction_End)
+	{
+		CloseHandle(menu);
+	}
+}
+
+
 public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:angles[3], &weapon)
 {
 	if (!IsValidAndAlive(client))
@@ -1086,6 +1151,12 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 	if (!g_InUse[client] && buttons & IN_USE)
 	{
 		g_InUse[client] = true;
+
+		if (IsInPoleEmploi(client)) {
+			if (IsUnemployed(client)) {
+				BuildPoleEmploiMenu(client);
+			}
+		}
 		
 		new Ent;
 		new String:Name[200];
@@ -1162,7 +1233,7 @@ public Action:OnPlayerRunCmd(client, &buttons, &impulse, Float:vel[3], Float:ang
 				}*/
 				decl String:Door[255];
 				GetEdictClassname(Ent, Door, sizeof(Door));
-				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 				{
 					new HammerID = Entity_GetHammerId(Ent);
 					decl String:hammerIdBuffer[40];
@@ -1487,7 +1558,7 @@ public Action:OnPlayerDeath(Handle:event, const String:name[], bool:dontBroadcas
 				{
 					if (killer != client)
 					{
-						if (IsMafia(killer)) {
+						/*if (IsMafia(killer)) {
 							if (IsMafiaLeader(client)) {
 								rankid[client] = 5;
 								rankid[killer] = 1;
@@ -1498,7 +1569,7 @@ public Action:OnPlayerDeath(Handle:event, const String:name[], bool:dontBroadcas
 								rankid[client] = 5;
 								rankid[killer] = 1;
 							}
-						}
+						}*/
 						if ((GetClientTeam(killer) == 2) && (GetClientTeam(client) == 3))
 						{
 							argent[killer] += 300;
@@ -2309,7 +2380,7 @@ public GiveSalary()
 	for (new i = 1; i <= MaxClients; i++)
 	{
 		new salaireClient = salaire[i];
-		new taxes = salaireClient * taxesAmount;
+		new taxes = (salaireClient * taxesAmount)/100;
 		if (!IsMaire(i) && !IsPolice(i)) {
 			salaireClient -= taxes;
 		}
@@ -2658,7 +2729,7 @@ public IsCyberCriminal(client) {
 }
 
 public IsCorruptedPolice(client) {
-	return ClientHasJob(2, client) && (GetClientReputation(client) < 55);
+	return ClientHasJob(2, client) && (GetClientReputation(client) < 55) && !IsMaire(client);
 }
 
 public IsWildlings(client)
@@ -2703,20 +2774,9 @@ public IsMoniteur(client)
 		return false;
 }
 
-public IsLoto(client)
-{
-	if (jobid[client] == 10)
-		return true;
-	else
-		return false;
-}
-
 public IsDetective(client)
 {
-	if (jobid[client] == 12)
-		return true;
-	else
-		return false;
+	return false;
 }
 
 public IsTriadesLeader(client)
@@ -2745,42 +2805,12 @@ public IsTueur(client)
 
 public IsMarshall(client)
 {
-	if (jobid[client] == 14 && rankid[client] == 5)
-		return true;
-	else
-		return false;
+	return false;
 }
 
 public IsGardeOnu(client)
 {
-	if (jobid[client] == 14 && rankid[client] == 6)
-		return true;
-	else
-		return false;
-}
-
-public IsTechnicien(client)
-{
-	if (jobid[client] == 15)
-		return true;
-	else
-		return false;
-}
-
-public IsMacdonald(client)
-{
-	if (jobid[client] == 16)
-		return true;
-	else
-		return false;
-}
-
-public IsAppartement(client)
-{
-	if (jobid[client] == 17)
-		return true;
-	else
-		return false;
+	return false;
 }
 
 public Action:Command_Rename(client, args)
@@ -3091,6 +3121,7 @@ public Action:Timer_Dead(Handle:timer, any:client)
 					CS_RespawnPlayer(client);
 					disarm(client);
 					GivePlayerItem(client, "weapon_knife");
+					SetEntityHealth(client, 350);
 					SetEntProp(client, Prop_Data, "m_ArmorValue", 100);
 				}
 				else if (IsJustice(client))
@@ -4473,7 +4504,7 @@ public Action:Command_Lock(client, args)
 			GetEdictClassname(Ent, Door, sizeof(Door));
 			Entity_GetName(Ent, entity_name, sizeof(entity_name));
 			
-			if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+			if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 			{
 				new HammerID = Entity_GetHammerId(Ent);
 				IntToString(HammerID, hammerIdBuffer, sizeof(hammerIdBuffer));
@@ -4537,7 +4568,7 @@ public Action:Command_Unlock(client, args)
 			GetEdictClassname(Ent, Door, sizeof(Door));
 			Entity_GetName(Ent, entity_name, sizeof(entity_name));
 			
-			if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+			if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 			{
 				new HammerID = Entity_GetHammerId(Ent);
 				IntToString(HammerID, hammerIdBuffer, sizeof(hammerIdBuffer));
@@ -4589,6 +4620,7 @@ stock LockingDoors()
 	LockingEntity("func_door_rotating");
 	LockingEntity("prop_door_rotating");
 	LockingEntity("func_door");
+	LockingEntity("func_button");
 }
 
 stock LockingEntity(const String:ClassName[])
@@ -4747,8 +4779,7 @@ stock Grab(client)
 									gObj[client] = ent;
 									grab[client] = true;
 								}
-								else
-								{
+								else {
 									if (GetClientJobID(client) == GetClientJobID(ent) && GetClientRankID(client) < GetClientRankID(ent) || GetClientRankID(ent) == 0)
 									{
 										if (IsPolice(client) || IsMarshall(client) || IsGardeOnu(client))
@@ -4760,17 +4791,31 @@ stock Grab(client)
 											if (IsPlayerInHisHideout(client)) {
 												gObj[client] = ent;
 												grab[client] = true;
+												g_grab[client] = CreateTimer(1.0, Timer_VerifyGrab, client, TIMER_REPEAT);
 											} else {
 												CPrintToChat(client, "%s : Le joueur ciblé n'est pas dans votre planque.", g_bPrefix); 
 												return;
 											}
-											
 										}
 									}
 									else
 									{
-										CPrintToChat(client, "%s : Vous ne pouvez pas porter ce joueur.", g_bPrefix);
-										return;
+										if (ArePlayersInSameZone(client, ent) && GetClientJobID(client) != GetClientJobID(ent))
+										{
+											if (ArePlayersInSameZone(client, ent)) {
+												if (IsPlayerInHisHideout(client)) {
+													gObj[client] = ent;
+													grab[client] = true;
+													g_grab[client] = CreateTimer(1.0, Timer_VerifyGrab, client, TIMER_REPEAT);
+												} else {
+													CPrintToChat(client, "%s : Le joueur ciblé n'est pas dans votre planque.", g_bPrefix); 
+													return;
+												}
+											}
+										} else {
+											CPrintToChat(client, "%s : Vous ne pouvez pas porter ce joueur.", g_bPrefix);
+											return;
+										}
 									}
 								}
 							}
@@ -4813,7 +4858,7 @@ stock Grab(client)
 						
 						Entity_GetName(ent, name, sizeof(name));
 						
-						if (!StrEqual(name, "caisse_kit") && !StrEqual(name, "caisse_fbi") && !StrEqual(name, "caisse_comico") && !StrEqual(name, "distributeur"))
+						if (!StrEqual(name, "caisse_kit") && !StrEqual(name, "caisse_fbi") && !StrEqual(name, "caisse_comico") && !StrEqual(name, "distributeur") && StrContains(name, "hacked_distributeur_") == -1)
 						{
 							ent = ReplacePhysicsEntity(ent);
 							
@@ -4856,6 +4901,37 @@ stock Grab(client)
 		{
 			CPrintToChat(client, "%s : Vous être trop loin pour porter.", g_bPrefix);
 			return;
+		}
+	}
+}
+
+public Action:Timer_VerifyGrab(Handle:timer, any:client)
+{
+	if (IsValidAndAlive(client))
+	{
+		new GrabPlayer = false;
+		new String:edictname[128];
+		if (gObj[client] != -1) {
+			GetEdictClassname(gObj[client], edictname, sizeof(edictname));
+			if (StrEqual(edictname, "player")) {
+				GrabPlayer = true;
+			} else {
+				GrabPlayer = false;
+			}
+		}
+		if (grab[client] && GrabPlayer) {
+			if (!ArePlayersInSameZone(client, EntRefToEntIndex(gObj[client]))) {
+				gObj[client] = -1;
+				grab[client] = false;
+				KillTimer(g_grab[client]);
+			}
+			if (!IsPlayerInHisHideout(client)) {
+				gObj[client] = -1;
+				grab[client] = false;
+				KillTimer(g_grab[client]);
+			}
+		} else {
+			KillTimer(g_grab[client]);
 		}
 	}
 }
@@ -5519,6 +5595,9 @@ Handle:BuildJailMenu(client, Player)
 		
 		Format(Buffer, sizeof(Buffer), "%i_19", Player);
 		AddMenuItem(jail_menu, Buffer, "Vente de produits illicites");
+
+		Format(Buffer, sizeof(Buffer), "%i_20", Player);
+		AddMenuItem(jail_menu, Buffer, "Tentative de corruption");
 	}
 	
 	DisplayMenu(jail_menu, client, MENU_TIME_FOREVER);
@@ -5684,6 +5763,13 @@ public Menu_Jail(Handle:jail_menu, MenuAction:action, param1, param2)
 				
 				CPrintToChat(param1, "%s : Vous avez emprisonner %N pour Vente de produits illicites.", g_bPrefix, Player);
 				CPrintToChat(Player, "%s : Vous avez été emprisonner par %N pour Vente de produits illicites.", g_bPrefix, CopSteamId);
+			}
+			if (number == 20)
+			{
+				Jail(Player, param1, 240, 250);
+				
+				CPrintToChat(param1, "%s : Vous avez emprisonner %N pour {red}Tentative de corruption{unique}.", g_bPrefix, Player);
+				CPrintToChat(Player, "%s : Vous avez été emprisonner par %N pour {red}Tentative de corruption{unique}.", g_bPrefix, CopSteamId);
 			}
 		}
 	}
@@ -7170,95 +7256,6 @@ public Menu_Demission(Handle:menu, MenuAction:action, client, param2)
 	}
 }
 
-
-public Action:Command_Crocheter(client, Args)
-{
-	if (IsValidAndAlive(client)) {
-		if (IsTriades(client) || IsMafia(client))
-		{	
-			if (!crochetageon[client])
-			{
-				new String:Door[255];
-				
-				Entiter[client] = GetClientAimTarget(client, false);
-				
-				if (Entiter[client] != -1)
-				{
-					GetEdictClassname(Entiter[client], Door, sizeof(Door));
-					
-					if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
-					{
-						if (Entity_IsLocked(Entiter[client]))
-						{
-							new timestamp;
-							timestamp = GetTime();
-							
-							if ((timestamp - crochetage[client]) < 20)
-							{
-								CPrintToChat(client, "%s : Vous devez attendre %i secondes avant de pouvoir crocheté une porte.", g_bPrefix, (20 - (timestamp - crochetage[client])) );
-							}
-							else
-							{
-								new Float:entorigin[3], Float:clientent[3];
-								GetEntPropVector(Entiter[client], Prop_Send, "m_vecOrigin", entorigin);
-								GetEntPropVector(client, Prop_Send, "m_vecOrigin", clientent);
-								new Float:distance = GetVectorDistance(entorigin, clientent);
-								new Float:vec[3];
-								GetClientAbsOrigin(client, vec);
-								vec[2] += 10;
-
-								if (distance > 80)
-								{
-									CPrintToChat(client, "%s : Vous êtes trop {red}loin {unique}pour crocheter cette porte.", g_bPrefix);
-								}
-								else
-								{
-									crochetage[client] = GetTime();
-									
-									SetEntPropFloat(client, Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
-									SetEntProp(client, Prop_Send, "m_iProgressBarDuration", 8);
-									
-									g_croche[client] = CreateTimer(8.0, TimerCrochetage, client, TIMER_REPEAT);
-									
-									SetEntityRenderColor(client, 255, 0, 0, 0);
-									SetEntityMoveType(client, MOVETYPE_NONE);
-									
-									TE_SetupBeamRingPoint(vec, 5.0, 800.0, g_modelLaser, g_modelHalo, 0, 15, 0.6, 15.0, 0.0, ColorCrochetage, 10, 0);
-									TE_SendToAll();
-									
-									CPrintToChat(client, "%s : Vous {red}crochetez {unique}la porte.", g_bPrefix);
-																		
-									crochetageon[client] = true;
-								}
-							}
-						}
-						else
-						{
-							CPrintToChat(client, "%s : La porte est déjà ouverte.", g_bPrefix);
-						}
-					}
-					else
-					{
-						CPrintToChat(client, "%s : Veuillez visé une porte.", g_bPrefix);
-					}
-				}
-				else
-				{
-					CPrintToChat(client, "%s : Veuillez visé une porte.", g_bPrefix);
-				}
-			}
-			else
-			{
-				CPrintToChat(client, "%s : Vous êtes déjà en train de crocheté.", g_bPrefix);
-			}
-		}
-		else
-		{
-			CPrintToChat(client, "%s : Vous devez faire partie d'un gang pour crocheter les portes", g_bPrefix);
-		}
-	}
-}
-
 public Action:Command_Vol(client, Args)
 {
 	if (IsValidAndAlive(client))
@@ -8023,30 +8020,47 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 	strcopy(itemUsed, sizeof(itemUsed), Buffer[1]);
 	if (IsValidAndAlive(client))
 	{
+		PrintToServer("%i : %i", lastDrugTimer[client], GetTime());
 		switch (itemID) {
 			case 1:
 			{
-				RemoveFromInventory(client, itemID, itemUsed, 1);
-				SetDrogue(client, 6, 6, TIME_CHAMPIGNONS);
-				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				if (lastDrugTimer[client] < GetTime()) {
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					SetDrogue(client, 6, 6, TIME_CHAMPIGNONS);
+					CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				} else {
+					CPrintToChat(client, "%s : Vous devez attendre {red}%i secondes{unique} avant de consommer {orange}%s{unique}.", g_bPrefix, ((lastDrugTimer[client] - GetTime())), itemUsed);
+				}
 			}
 			case 2:
 			{
-				RemoveFromInventory(client, itemID, itemUsed, 1);
-				SetDrogue(client, 4, 4, TIME_METH);
-				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				if (lastDrugTimer[client] < GetTime()) {
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					SetDrogue(client, 4, 4, TIME_METH);
+					CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				} else {
+					CPrintToChat(client, "%s : Vous devez attendre {red}%i secondes{unique} avant de consommer {orange}%s{unique}.", g_bPrefix, ((lastDrugTimer[client] - GetTime())), itemUsed);
+				}
 			}
 			case 18:
 			{
-				RemoveFromInventory(client, itemID, itemUsed, 1);
-				SetDrogue(client, 1, 1, TIME_SHIT);
-				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				if (lastDrugTimer[client] < GetTime()) {
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					SetDrogue(client, 1, 1, TIME_SHIT);
+					CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				} else {
+					CPrintToChat(client, "%s : Vous devez attendre {red}%i secondes{unique} avant de consommer {orange}%s{unique}.", g_bPrefix, ((lastDrugTimer[client] - GetTime())), itemUsed);
+				}
 			}
 			case 19:
 			{
-				RemoveFromInventory(client, itemID, itemUsed, 1);
-				SetDrogue(client, 2, 2, TIME_COCAINE);
-				CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				if (lastDrugTimer[client] < GetTime()) {
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					SetDrogue(client, 2, 2, TIME_COCAINE);
+					CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				} else {
+					CPrintToChat(client, "%s : Vous devez attendre {red}%i secondes{unique} avant de consommer {orange}%s{unique}.", g_bPrefix, ((lastDrugTimer[client] - GetTime())), itemUsed);
+				}
 			}
 			case 4:
 			{
@@ -8217,6 +8231,26 @@ public Menu_Item(Handle:Item, MenuAction:action, client, param2)
 				UseHealthKit(client, 2);
 				CPrintToChat(client, "%s : Vous avez utilisé un {olive}%s{unique} !", g_bPrefix, itemUsed);
 			}
+			case 32:
+			{
+				if (lastDrugTimer[client] < GetTime()) {
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					SetDrogue(client, 3, 3, TIME_ECSTAZY);
+					CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				} else {
+					CPrintToChat(client, "%s : Vous devez attendre {red}%i secondes{unique} avant de consommer {orange}%s{unique}.", g_bPrefix, ((lastDrugTimer[client] - GetTime())), itemUsed);
+				}
+			}
+			case 33:
+			{
+				if (lastDrugTimer[client] < GetTime()) {
+					RemoveFromInventory(client, itemID, itemUsed, 1);
+					SetDrogue(client, 7, 7, TIME_FENTANYL);
+					CPrintToChat(client, "%s : Vous avez utilisé des {olive}%s{unique}.", g_bPrefix, itemUsed);
+				} else {
+					CPrintToChat(client, "%s : Vous devez attendre {red}%i secondes{unique} avant de consommer {orange}%s{unique}.", g_bPrefix, ((lastDrugTimer[client] - GetTime())), itemUsed);
+				}
+			}
 			case 6:
 			{
 				if (ReloadWeaponAmmos(client)) {
@@ -8236,13 +8270,13 @@ public UseHealthKit (client, kitTimer) {
 			if (IsInRange(client, Entiter[client])) {
 				crochetageon[client] = true;
 				SetEntPropFloat(client, Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
-				SetEntProp(client, Prop_Send, "m_iProgressBarDuration", float(kitTimer));
+				SetEntProp(client, Prop_Send, "m_iProgressBarDuration", kitTimer);
 				g_croche[client] = CreateTimer(float(kitTimer), Timer_HealthKit, client, TIMER_REPEAT);
 				SetEntityRenderColor(client, 0, 255, 128, 0);
 				SetEntityMoveType(client, MOVETYPE_NONE);
 
 				SetEntPropFloat(Entiter[client], Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
-				SetEntProp(Entiter[client], Prop_Send, "m_iProgressBarDuration", float(kitTimer));
+				SetEntProp(Entiter[client], Prop_Send, "m_iProgressBarDuration", kitTimer);
 				SetEntityRenderColor(Entiter[client], 0, 255, 128, 0);
 				SetEntityMoveType(Entiter[client], MOVETYPE_NONE);
 
@@ -8254,7 +8288,7 @@ public UseHealthKit (client, kitTimer) {
 		} else {
 			crochetageon[client] = true;
 			SetEntPropFloat(client, Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
-			SetEntProp(client, Prop_Send, "m_iProgressBarDuration", float(kitTimer));
+			SetEntProp(client, Prop_Send, "m_iProgressBarDuration", kitTimer);
 			g_croche[client] = CreateTimer(float(kitTimer), Timer_HealthKit, client, TIMER_REPEAT);
 			SetEntityRenderColor(client, 0, 255, 128, 0);
 			SetEntityMoveType(client, MOVETYPE_NONE);
@@ -8273,9 +8307,12 @@ public Action:Timer_HealthKit(Handle:timer, any:client)
 			crochetageon[Entiter[client]] = false;
 			SetEntPropFloat(Entiter[client], Prop_Send, "m_flProgressBarStartTime", GetGameTime()); 
 			SetEntProp(Entiter[client], Prop_Send, "m_iProgressBarDuration", 0);
+			CPrintToChat(Entiter[client], "%s : Le kit de soins a bien été {olive}appliqué{unique}.", g_bPrefix);
 		} else {
 			SetEntityHealth(client, 200);
-		}	
+		}
+
+		CPrintToChat(client, "%s : Vous avez bien appliqué le kit de soins {olive}appliqué{unique}.", g_bPrefix);
 		SetEntityMoveType(client, MOVETYPE_WALK);
 		SetEntityRenderColor(client, 255, 255, 255, 255);
 	
@@ -8408,7 +8445,7 @@ public LockPickDoor (client, isKit) {
 		{
 			GetEdictClassname(Entiter[client], Door, sizeof(Door));
 			
-			if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+			if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 			{
 				new HammerID = Entity_GetHammerId(Entiter[client]);
 				decl String:hammerIdBuffer[40];
@@ -8496,7 +8533,7 @@ public ElectronicLock (client) {
 		decl String:Door[255];
 		GetEdictClassname(entity, Door, sizeof(Door));
 				
-		if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+		if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 		{
 			new HammerID = Entity_GetHammerId(entity);
 			decl String:HammerId[255];
@@ -8709,7 +8746,7 @@ public Menu_TypeKeypad(Handle:menu, MenuAction:action, client, param2)
 				if (Ent != -1) {
 					new String:Door[255];
 					GetEdictClassname(Ent, Door, sizeof(Door));
-					if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+					if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 					{
 						new HammerID = Entity_GetHammerId(Ent);
 						if (HammerID == StringToInt(hammerID)) {
@@ -8779,7 +8816,7 @@ public Action:TimerCrochetage(Handle:timer, any:client)
 			}
 			new odds = GetRandomInt(1, maxChance);
 			if (odds <= 4) {
-				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 				{
 					CPrintToChat(client, "%s : Vous avez crocheter la porte avec succès.", g_bPrefix);
 						
@@ -8792,7 +8829,7 @@ public Action:TimerCrochetage(Handle:timer, any:client)
 					CPrintToChat(client, "%s : Vous devez viser la porte, réessayez !", g_bPrefix);
 				}
 			} else {
-				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 				{
 					CPrintToChat(client, "%s : Vous avez échoué le crochetage.", g_bPrefix);
 				}
@@ -9023,7 +9060,7 @@ public Menu_AutosellPlayer(Handle:sell_menuPlayer, MenuAction:action, client, pa
 
 AutoSell(client, ItemID, String:item[], Quantity, Cost)
 {
-	new autoSellCost = Cost/2;
+	new autoSellCost = Cost;
 	
 	if (MakeTransaction(client, client, -autoSellCost, Quantity, ItemID))
 	{
@@ -9375,6 +9412,10 @@ SellActivity(client, Player, ItemID, String:item[], Quantity, Cost)
 					SetEntProp(ent, Prop_Send, "m_CollisionGroup", 11);
 				}
 			}
+			case 8:
+			{
+				SetEntityHealth(Player, 175);
+			}
 		}
 
 		return 1;
@@ -9643,6 +9684,8 @@ public SetDrogue(TARGET, ID, EFFECT, Float:TIME)
 {
 	if (IsValidAndAlive(TARGET))
 	{
+		lastDrugTimer[TARGET] = GetTime() + RoundToZero(TIME);
+		PrintToServer("%i", lastDrugTimer[TARGET]);
 		if (ID == 1)
 		{
 			SetEntityHealth(TARGET, 102);
@@ -9657,14 +9700,14 @@ public SetDrogue(TARGET, ID, EFFECT, Float:TIME)
 		}
 		else if (ID == 3)
 		{
-			SetEntityHealth(TARGET, 250);
-			ModifySpeed(TARGET, 1.3);
+			SetEntityHealth(TARGET, 10);
+			ModifySpeed(TARGET, 2.5);
 			TE_SetupBeamFollow(TARGET, g_BeamSpriteFollow, 0, 10.0, 5.0, 50.0, 3, ColorHeroine);
 		}
 		else if (ID == 4)
 		{
 			SetEntityHealth(TARGET, 200);
-			ModifySpeed(TARGET, 1.4);
+			ModifySpeed(TARGET, 1.2);
 			TE_SetupBeamFollow(TARGET, g_BeamSpriteFollow, 0, 10.0, 5.0, 50.0, 3, ColorEcstazy);
 		}
 		else if (ID == 5)
@@ -9678,6 +9721,14 @@ public SetDrogue(TARGET, ID, EFFECT, Float:TIME)
 			SetEntityHealth(TARGET, 125);
 			SetEntityGravity(TARGET, 0.8);
 			TE_SetupBeamFollow(TARGET, g_BeamSpriteFollow, 0, 10.0, 5.0, 50.0, 3, ColorChampignons);
+		}
+		else if (ID == 7)
+		{
+			SetEntityHealth(TARGET, 2000);
+			SetEntityGravity(TARGET, 1.2);
+			ModifySpeed(TARGET, 0.5);
+			TE_SetupBeamFollow(TARGET, g_BeamSpriteFollow, 0, 0.0, 0.0, 0.0,0, ColorChampignons);
+			CreateTimer(TIME, ResetFentanyl, TARGET);
 		}
 		
 		TE_SendToAll();
@@ -9708,11 +9759,24 @@ public SetDrogue(TARGET, ID, EFFECT, Float:TIME)
 			{
 				ClientCommand(TARGET, "r_screenoverlay effects/tp_refract.vmt");
 			}
+			else if (EFFECT == 7)
+			{
+				ClientCommand(TARGET, "r_screenoverlay debug/yuv.vmt");
+			}
 		}
 		
 		CreateTimer(TIME, ResetDrugs, TARGET);
 	}
 }
+
+public Action:ResetFentanyl(Handle:timer, any:client)
+{
+	if (IsValidAndAlive(client))
+	{
+		ForcePlayerSuicide(client);
+	}
+}
+
 
 public Action:ResetDrugs(Handle:timer, any:client)
 {
@@ -12250,7 +12314,7 @@ public Action:Command_Buy(client, args)
 			if (IsInRange(client, Ent)) {
 				GetEdictClassname(Ent, Door, sizeof(Door));
 				
-				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door"))
+				if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button"))
 				{
 					if (MakeTransaction(client, client, -500, 0, 0)) {
 						new HammerID = Entity_GetHammerId(Ent);
@@ -12288,15 +12352,15 @@ public Action:Command_Buygroup(client, args)
 				if (args >= 1) {
 					decl String:arg1[128];
 					decl String:arg2[128];
-					
+						
 					GetCmdArg(1, arg1, sizeof(arg1));
 					new insertId = StringToInt(arg1);
 					GetCmdArg(2, arg2, sizeof(arg2));
 					new rankId = StringToInt(arg2); 
-					
-					GetEdictClassname(Ent, Door, sizeof(Door));
-							
-					if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door")) {
+						
+					GetEdictClassname(Ent, Door, sizeof(Door));		
+
+					if (StrEqual(Door, "func_door_rotating") || StrEqual(Door, "prop_door_rotating") || StrEqual(Door, "func_door") || StrEqual(Door, "func_button")) {
 						new HammerID = Entity_GetHammerId(Ent);
 						decl String:buffer[400];
 
@@ -12307,7 +12371,6 @@ public Action:Command_Buygroup(client, args)
 						}
 						PrintToServer("query : %s", buffer);
 						SQL_TQuery(g_ThreadedHandle, CallbackBuyDoor, buffer, client);
-
 					} else {
 						CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{unique} ça !", g_bPrefix);
 					}
@@ -12550,6 +12613,7 @@ public CallbackBuyDoor(Handle:owner, Handle:hndl, const String:error[], any:clie
 	if (hndl == null)
 	{
 		CPrintToChat(client, "%s : Vous ne {red}pouvez pas acheter{unique} cette porte.", g_bPrefix);
+		MakeTransaction(client, client, 500, 0, 0);
 	} else {
 		ReloadDoorsKV();
 		CPrintToChat(client, "%s : Vous avez {olive}acheté{unique} les clés de cette porte pour {olive}500€{unique}.", g_bPrefix);
@@ -12913,7 +12977,7 @@ IsInBricoleur(client)
 
 IsPrinterInBanque(printer)
 {
-	if (StrEqual(ZonePrinter[printer], "La Banque", false)) {
+	if (StrEqual(ZonePrinter[printer], "La Banque", false) || StrEqual(ZonePrinter[printer], "Coffre de la banque", false)) {
 		return true;
 	} else {
 		return false;
@@ -12922,7 +12986,7 @@ IsPrinterInBanque(printer)
 
 IsInBanque(client)
 {
-	if (StrEqual(ZoneUser[client], "La Banque", false)) {
+	if (StrEqual(ZoneUser[client], "La Banque", false) || IsInCoffreBanque(client)) {
 		return true;
 	} else {
 		return false;
@@ -12950,6 +13014,15 @@ IsInArtificier(client)
 IsInMafia(client)
 {
 	if (StrEqual(ZoneUser[client], "Les Mafieux", false)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+IsInPoleEmploi(client)
+{
+	if (StrEqual(ZoneUser[client], "Pole-Emploi", false)) {
 		return true;
 	} else {
 		return false;
